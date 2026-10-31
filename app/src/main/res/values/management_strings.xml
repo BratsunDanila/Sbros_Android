@@ -1,0 +1,18 @@
+<resources>
+    <string name="waiting_screen">Жду ответа</string><string name="next_actions">Следующие действия</string>
+    <string name="projects_sub">Большие результаты — маленькими шагами</string><string name="waiting_sub">То, что сейчас зависит не от тебя</string>
+    <string name="someday_sub">Идеи без обязательств</string><string name="materials_sub">На память, без задачи</string>
+    <string name="done_sub">Твои завершённые действия</string><string name="next_actions_sub">То, что уже можно выполнить</string>
+    <string name="edit_project">Изменить проект</string><string name="project_actions_label">ДЕЙСТВИЯ</string><string name="add_small_step">Добавь следующий небольшой шаг.</string>
+    <string name="empty_collection">Здесь пока пусто. И это нормально.</string>
+    <plurals name="project_actions"><item quantity="one">%d действие осталось</item><item quantity="few">%d действия осталось</item><item quantity="many">%d действий осталось</item><item quantity="other">%d действий осталось</item></plurals>
+    <string name="task_editor">Дело</string><string name="task_editor_sub">Чуть больше деталей — только когда нужно.</string>
+    <string name="what_to_do">Что сделать</string><string name="stored_in">Где хранится</string><string name="area">Сфера</string>
+    <string name="title_label">Название</string><string name="note_label">Заметка</string><string name="project_result">Желаемый результат</string>
+    <string name="add_task">Добавить дело</string><string name="one_thought_one_action">Одна мысль, одно действие.</string>
+    <string name="what_needs_doing">Что нужно сделать?</string><string name="save_to">Куда сохранить</string>
+    <string name="new_project">Новый проект</string><string name="material">Материал</string><string name="project">Проект</string>
+    <string name="delete_project">Удалить проект</string><string name="delete_project_question">Удалить проект?</string>
+    <string name="project_tasks_kept">Дела проекта останутся в своих разделах. Их связь с проектом будет удалена.</string>
+    <string name="delete_material">Удалить материал</string><string name="save_failed">Не удалось сохранить. Проверь запись и повтори.</string>
+</resources>

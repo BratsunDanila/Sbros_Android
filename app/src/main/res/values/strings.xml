@@ -1,0 +1,52 @@
+<resources>
+    <string name="app_name">Сброс</string>
+    <string name="tasks">Дела</string><string name="thoughts">Мысли</string><string name="capture">Сброс</string><string name="calendar">Календарь</string><string name="overview">Обзор</string>
+    <string name="settings">Настройки</string><string name="search">Поиск по мыслям</string>
+    <string name="tasks_sub">Всё начинается с одного шага.</string>
+    <string name="thoughts_sub">Не всё должно становиться делом.</string>
+    <string name="calendar_sub">Только даты, которые правда важны.</string>
+    <string name="overview_sub">Спокойно посмотреть на всю картину.</string>
+    <string name="welcome_title">Освободи\nголову.</string>
+    <string name="welcome_sub">Остальное разложим вместе.</string>
+    <string name="welcome_body">Дела, идеи и всё, что на уме.\nОдно спокойное место для твоих мыслей.</string>
+    <string name="start">Начать</string><string name="have_account">У меня уже есть аккаунт</string>
+    <string name="demo_caption">Локальная демонстрация · без аккаунта</string>
+    <string name="capture_eyebrow">ЗДЕСЬ МОЖНО ВСЁ</string>
+    <string name="capture_title_first">Что у тебя</string><string name="capture_title_second">на уме?</string>
+    <string name="capture_sub">Дела, идеи, переживания — говори как есть.\nРазберёмся потом.</string>
+    <string name="speak">Нажми, чтобы говорить</string><string name="type_below">Или просто напиши ниже</string>
+    <string name="capture_hint">Напиши всё, что хочется выгрузить…</string>
+    <string name="no_categories">Никаких категорий и обязательных полей.</string>
+    <string name="imperfect">Необязательно формулировать идеально.</string>
+    <string name="later">На потом</string><string name="analyze">Разобрать</string>
+    <string name="first_step">Помочь сделать первый шаг</string>
+    <string name="suggested_now">ПРЕДЛАГАЮ СЕЙЧАС</string><string name="free_now">Пока свободно</string>
+    <string name="task_position">%1$d из %2$d</string><string name="next_action">Следующее действие</string>
+    <string name="one_at_a_time">ОДНО ДЕЛО ЗА РАЗ</string><string name="small_start">Можно начать с самого малого.</string>
+    <string name="remaining_tasks">Остальные дела</string><string name="remaining_count">%1$d в списке</string>
+    <string name="one_task_left">Осталось всего одно действие.</string><string name="no_new_tasks">Новых дел пока нет.</string>
+    <string name="view_thought_source">Посмотреть исходный сброс</string><string name="thought_source">Исходная запись</string>
+    <string name="another">Другое</string><string name="done">Готово</string>
+    <string name="all">Все</string><string name="ideas">Идеи</string><string name="diary">Дневник</string><string name="favorites">Любимое</string>
+    <string name="thought_hero_label">МОЖНО ПРОСТО БЫТЬ</string>
+    <string name="thought_hero_title">Здесь не нужно\nничего успевать.</string>
+    <string name="thought_hero_sub">Сохраняй идеи, чувства и мгновения.\nОстальное подождёт.</string>
+    <string name="open_entry">Открыть запись</string>
+    <string name="today">СЕГОДНЯ</string><string name="yesterday">ВЧЕРА</string><string name="this_week">НА ЭТОЙ НЕДЕЛЕ</string>
+    <string name="calendar_hero_label">ВСЁ В СВОЁ ВРЕМЯ</string><string name="calendar_hero_title">Не каждому делу\nнужен дедлайн.</string><string name="calendar_hero_sub">Здесь лишь то, у чего есть своя дата.</string>
+    <string name="selected_day">ВЫБРАННЫЙ ДЕНЬ</string><string name="add">Добавить</string>
+    <string name="free_day">Свободный день</string><string name="free_day_sub">Пока ничего не запланировано.\nИ это тоже хороший план.</string>
+    <string name="inbox_label">ТВОИ ВХОДЯЩИЕ</string><string name="inbox_title">Есть что разобрать.</string><string name="open_inbox">Посмотреть входящие</string>
+    <string name="your_system">ТВОЯ СИСТЕМА</string><string name="everything_else">Всё остальное</string>
+    <string name="projects">Проекты</string><string name="waiting">Ожидаю</string><string name="someday">Когда-нибудь</string><string name="materials">Материалы</string><string name="all_actions">Все действия</string><string name="completed">Сделано</string>
+    <string name="task_check_label">БЕЗ СПЕШКИ</string><string name="task_check_title">Проверь свои дела</string><string name="task_check_sub">Посмотри, все ли задачи ещё актуальны.</string><string name="capture_history">История сбросов</string>
+    <string name="back">Назад</string><string name="close">Закрыть</string><string name="save">Сохранить</string><string name="cancel">Отмена</string><string name="delete">Удалить</string><string name="edit">Изменить</string><string name="undo">Отменить</string>
+    <string name="ai_unconfigured">Не настроен ИИ</string><string name="ai_unconfigured_sub">На первом этапе анализ не подключён. Исходную запись можно оставить во входящих. Автоматического распределения пока нет.</string>
+    <string name="speech_unconfigured">Голосовой ввод пока не подключён</string><string name="speech_unconfigured_sub">Пока можно написать текст. Распознавание речи будет подключено отдельным этапом.</string>
+    <string name="auth_unconfigured">Вход появится на этапе 2</string><string name="auth_unconfigured_sub">Сейчас доступен локальный просмотр интерфейса. Регистрация и серверное хранение ещё не подключены.</string>
+    <string name="demo_only">Изменения демонстрационные. Серверное хранение пока не подключено.</string>
+    <string name="palette">ПАЛИТРА</string><string name="your_sbros">Твой Сброс</string><string name="settings_sub">Настроить настроение интерфейса.</string>
+    <string name="light_theme">Светлая тема</string><string name="dark_theme">Тёмная тема</string><string name="reset_demo">Сбросить демонстрационные данные</string>
+    <string name="empty_tasks">На сегодня спокойно.</string><string name="empty_tasks_sub">Все следующие действия завершены.\nМожно возвращаться к своим планам позже.</string>
+    <string name="empty_search">Пока ничего не нашлось</string><string name="find_words">Найти запись по словам…</string>
+</resources>
