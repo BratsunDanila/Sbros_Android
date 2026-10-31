@@ -114,9 +114,13 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                         val id=entry.arguments?.getString("id").orEmpty()
                         val review by model.analysis.collectAsState()
                         LaunchedEffect(id) {model.openAnalysis(id,graph.ai)}
+                        LaunchedEffect(id,review.captureId,review.scope,review.phase) {
+                            if(review.captureId==id&&review.scope==workspace.scope&&review.phase=="saved")navigate("capture")
+                        }
+                        if(review.phase!="saved"||review.captureId!=id||review.scope!=workspace.scope)
                         CaptureAnalysisScreen(if(review.captureId==id&&review.scope==workspace.scope)review else ru.sbros.app.data.ai.CaptureAnalysisState(phase="loading"),ai.hasKey,
                             start={consent->model.requestAnalysis(graph.ai,consent)},manual=model::manualAnalysis,edit=model::editProposal,add=model::addProposal,confirm=model::confirmAnalysis,
-                            back={model.resumeAnalysisOriginal();navigate("capture")},openAi={sheet="ai-settings"},result=::navigate,again={navigate("capture")})
+                            back={model.resumeAnalysisOriginal();navigate("capture")},openAi={sheet="ai-settings"})
                     }
                     composable("calendar") {CalendarScreen(state,{nav.navigate("settings")},{event,date -> selectedEvent=event?.id?:0;editorRevision=revision("event",selectedEvent);eventDate=date;sheet="event"},::editTask,::completeTask)}
                     composable("overview") {OverviewScreen(state,{nav.navigate("settings")},::openOverview)}

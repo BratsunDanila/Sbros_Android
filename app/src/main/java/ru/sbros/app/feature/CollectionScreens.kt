@@ -58,9 +58,21 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
                 }
                 else -> {
                     val tasks=state.tasks.filter {it.status==key}.let {if(key=="done")it.reversed()else it}
-                    items(tasks,key={"action-${it.id}"}) {task ->
-                        ManagementTaskRow(task,state,complete) {editTask(task.id)}
-                        Spacer(Modifier.height(8.dp))
+                    if(key=="next") {
+                        items(projectTaskGroups(tasks,state.projects),key={it.key}) {group ->
+                            if(group.project!=null)ProjectTaskGroup(group) {task ->
+                                ManagementTaskRow(task,state,complete,showProject=false,embedded=true) {editTask(task.id)}
+                            } else {
+                                val task=group.tasks.first()
+                                ManagementTaskRow(task,state,complete) {editTask(task.id)}
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    } else {
+                        items(tasks,key={"action-${it.id}"}) {task ->
+                            ManagementTaskRow(task,state,complete) {editTask(task.id)}
+                            Spacer(Modifier.height(8.dp))
+                        }
                     }
                     if(tasks.isEmpty())item {EmptyCollection()}
                 }
@@ -106,9 +118,9 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
         }
     }
 }
-@Composable internal fun ManagementTaskRow(task: DemoTask,state: DemoState,complete: (Int)->Unit,showDeadline: Boolean=true,showProject: Boolean=true,edit: ()->Unit) {
+@Composable internal fun ManagementTaskRow(task: DemoTask,state: DemoState,complete: (Int)->Unit,showDeadline: Boolean=true,showProject: Boolean=true,embedded: Boolean=false,edit: ()->Unit) {
     val c=LocalSbrosColors.current
-    Paper(Modifier.fillMaxWidth().testTag("management-task-${task.id}"),20.dp) {
+    TaskRowSurface(Modifier.fillMaxWidth().testTag("management-task-${task.id}"),20.dp,embedded) {
         Row(Modifier.fillMaxWidth().padding(start=5.dp,end=8.dp,top=12.dp,bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {
             Box(Modifier.size(43.dp).semantics {contentDescription="Выполнить ${task.title}"}.clickable(enabled=task.status!="done",onClick={complete(task.id)}),contentAlignment=Alignment.Center) {
                 Box(Modifier.size(21.dp).background(if(task.status=="done")c.good else androidx.compose.ui.graphics.Color.Transparent,CircleShape).border(1.5.dp,if(task.status=="done")c.good else c.muted,CircleShape),contentAlignment=Alignment.Center){if(task.status=="done")Glyph(R.drawable.ic_check,16.dp,androidx.compose.ui.graphics.Color.White)}

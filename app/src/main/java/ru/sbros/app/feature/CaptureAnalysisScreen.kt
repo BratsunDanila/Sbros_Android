@@ -20,18 +20,18 @@ import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.ai.*
 
 @Composable fun CaptureAnalysisScreen(state: CaptureAnalysisState,hasKey: Boolean,start: (Boolean)->Unit,manual: ()->Unit,
-    edit: (CaptureProposal)->Unit,add: ()->Unit,confirm: ()->Unit,back: ()->Unit,openAi: ()->Unit,result: (String)->Unit,again: ()->Unit) {
+    edit: (CaptureProposal)->Unit,add: ()->Unit,confirm: ()->Unit,back: ()->Unit,openAi: ()->Unit) {
     val c=LocalSbrosColors.current
     var sourceExpanded by rememberSaveable(state.captureId) {mutableStateOf(false)}
     val saving=state.phase=="saving"
     BackHandler {if(!saving)back()}
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(start=20.dp,end=20.dp,top=18.dp,bottom=28.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item("header") {
-            QuietAction(if(state.phase=="saved")"Сброс" else "К тексту",R.drawable.ic_left,c.muted2) {if(!saving)back()}
+            QuietAction("К тексту",R.drawable.ic_left,c.muted2) {if(!saving)back()}
             Spacer(Modifier.height(28.dp))
-            Copy(when(state.phase){"saved"->"Стало свободнее.";"review","saving"->"Разложим\nпо полкам?";"processing"->"Немного ясности.";else->"Твой сброс."},35f,weight=750,line=39f,tracking=-2f)
+            Copy(when(state.phase){"review","saving"->"Разложим\nпо полкам?";"processing"->"Немного ясности.";else->"Твой сброс."},35f,weight=750,line=39f,tracking=-2f)
             Spacer(Modifier.height(10.dp))
-            Copy(when(state.phase){"saved"->"Записи на своих местах. Оригинал — в истории.";"review","saving"->"Это предложения. Измени всё, что хочется, и подтверди.";"processing"->"Отделяем дела от идей и мыслей. Без лишних обязательств.";else->"Сохраним смысл и найдём место для каждой мысли."},12f,c.muted2,line=19f)
+            Copy(when(state.phase){"review","saving"->"Это предложения. Измени всё, что хочется, и подтверди.";"processing"->"Отделяем дела от идей и мыслей. Без лишних обязательств.";else->"Сохраним смысл и найдём место для каждой мысли."},12f,c.muted2,line=19f)
             Spacer(Modifier.height(10.dp))
         }
         if(state.original.isNotBlank()&&state.phase!="saved")item("source") {
@@ -85,22 +85,6 @@ import ru.sbros.app.data.ai.*
                 ActionButton(if(saving)"Сохраняем…" else "Подтвердить · ${state.accepted.size}",confirm,Modifier.fillMaxWidth(),enabled=!saving&&state.accepted.isNotEmpty(),icon=R.drawable.ic_check)
                 Spacer(Modifier.height(10.dp));Copy("До подтверждения эти карточки остаются предложениями.",10f,c.muted,line=17f)
             }
-        }
-        if(state.phase=="saved")item("saved") {
-            Paper(Modifier.fillMaxWidth(),26.dp,true) {
-                Rings(Modifier.matchParentSize(),kind="overview")
-                Column(Modifier.padding(24.dp)) {
-                    Glyph(R.drawable.ic_check,35.dp,c.good)
-                    Spacer(Modifier.height(20.dp));Copy(if(state.accepted.isEmpty())"Всё сохранено" else "Сохранено · ${state.accepted.size}",25f,weight=750,tracking=-1f)
-                    Spacer(Modifier.height(16.dp))
-                    val groups=state.accepted.groupingBy {when(it.kind){"next"->"Дела";"reflection","idea"->"Мысли";"cal"->"Календарь";else->"Обзор"}}.eachCount()
-                    groups.forEach {(label,count)->Copy("$label · $count",12f,c.muted2,modifier=Modifier.padding(vertical=4.dp))}
-                }
-            }
-            Spacer(Modifier.height(18.dp));ActionButton("Ещё один сброс",again,Modifier.fillMaxWidth(),icon=R.drawable.ic_mic_nav)
-            Spacer(Modifier.height(9.dp));ActionButton("Посмотреть результат",{
-                result(when {state.accepted.any {it.kind=="next"}->"tasks";state.accepted.any {it.kind in listOf("reflection","idea")}->"thoughts";state.accepted.any {it.kind=="cal"}->"calendar";else->"overview"})
-            },Modifier.fillMaxWidth(),primary=false,icon=R.drawable.ic_arrowright)
         }
     }
 }

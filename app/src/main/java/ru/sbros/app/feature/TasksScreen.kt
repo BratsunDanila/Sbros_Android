@@ -34,6 +34,7 @@ import ru.sbros.app.data.*
     val task=state.focusedAction
     val all=state.availableActions
     val rest=state.remainingActions
+    val groups=remember(rest,state.projects) {projectTaskGroups(rest,state.projects)}
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow=maxWidth<350.dp
         LazyColumn(Modifier.fillMaxSize().testTag("tasks-list"),state=listState,
@@ -73,10 +74,20 @@ import ru.sbros.app.data.*
             if(rest.isEmpty()) item(key="empty-remaining",contentType="empty") {
                 Paper(Modifier.fillMaxWidth(),17.dp) {Copy(stringResource(if(all.size==1)R.string.one_task_left else R.string.no_new_tasks),11f,c.muted2,modifier=Modifier.padding(13.dp))}
             }
-            items(rest,key={"task-${it.id}"},contentType={"task"}) { action ->
-                TaskListRow(action,state.projects.find {it.id==action.projectId}?.title,compact,Modifier.animateItem(),complete,{edit(action.id)}) {
-                    select(action.id)
-                    scope.launch {listState.animateScrollToItem(1)}
+            items(groups,key={it.key},contentType={if(it.project!=null)"project" else "task"}) { group ->
+                if(group.project!=null) {
+                    ProjectTaskGroup(group) {action ->
+                        TaskListRow(action,null,compact,Modifier,complete,{edit(action.id)},embedded=true) {
+                            select(action.id)
+                            scope.launch {listState.animateScrollToItem(1)}
+                        }
+                    }
+                } else {
+                    val action=group.tasks.first()
+                    TaskListRow(action,state.projects.find {it.id==action.projectId}?.title,compact,Modifier.animateItem(),complete,{edit(action.id)}) {
+                        select(action.id)
+                        scope.launch {listState.animateScrollToItem(1)}
+                    }
                 }
                 Spacer(Modifier.height(7.dp))
             }
@@ -141,9 +152,9 @@ import ru.sbros.app.data.*
     }
 }
 
-@Composable private fun TaskListRow(task: DemoTask,projectTitle: String?,compact: Boolean,modifier: Modifier,complete: (Int)->Unit,edit: ()->Unit,select: ()->Unit) {
+@Composable private fun TaskListRow(task: DemoTask,projectTitle: String?,compact: Boolean,modifier: Modifier,complete: (Int)->Unit,edit: ()->Unit,embedded: Boolean=false,select: ()->Unit) {
     val c=LocalSbrosColors.current
-    Paper(modifier.fillMaxWidth().testTag("remaining-task-${task.id}"),17.dp) {
+    TaskRowSurface(modifier.fillMaxWidth().testTag("remaining-task-${task.id}"),17.dp,embedded) {
         Row(Modifier.fillMaxWidth().heightIn(min=if(compact)52.dp else 59.dp).padding(start=2.dp,end=7.dp,top=if(compact)3.dp else 5.dp,bottom=if(compact)3.dp else 5.dp),verticalAlignment=Alignment.CenterVertically) {
             Box(Modifier.size(42.dp).testTag("complete-task-${task.id}").semantics {contentDescription="Выполнить ${task.title}"}
                 .clickable(role=Role.Checkbox,onClick={complete(task.id)}),contentAlignment=Alignment.Center) {
