@@ -20,7 +20,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
-import kotlinx.coroutines.launch
 import ru.sbros.app.R
 import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
@@ -29,7 +28,6 @@ import ru.sbros.app.data.*
     help: ()->Unit, select: (Int)->Unit, skip: ()->Unit, edit: (Int)->Unit = {}) {
     val c=LocalSbrosColors.current
     val listState=rememberLazyListState()
-    val scope=rememberCoroutineScope()
     val compact=LocalConfiguration.current.screenHeightDp<=740
     val task=state.focusedAction
     val all=state.availableActions
@@ -77,17 +75,11 @@ import ru.sbros.app.data.*
             items(groups,key={it.key},contentType={if(it.project!=null)"project" else "task"}) { group ->
                 if(group.project!=null) {
                     ProjectTaskGroup(group) {action ->
-                        TaskListRow(action,null,compact,Modifier,complete,{edit(action.id)},embedded=true) {
-                            select(action.id)
-                            scope.launch {listState.animateScrollToItem(1)}
-                        }
+                        TaskListRow(action,null,compact,Modifier,complete,{edit(action.id)},embedded=true)
                     }
                 } else {
                     val action=group.tasks.first()
-                    TaskListRow(action,state.projects.find {it.id==action.projectId}?.title,compact,Modifier.animateItem(),complete,{edit(action.id)}) {
-                        select(action.id)
-                        scope.launch {listState.animateScrollToItem(1)}
-                    }
+                    TaskListRow(action,state.projects.find {it.id==action.projectId}?.title,compact,Modifier.animateItem(),complete,{edit(action.id)})
                 }
                 Spacer(Modifier.height(7.dp))
             }
@@ -152,16 +144,16 @@ import ru.sbros.app.data.*
     }
 }
 
-@Composable private fun TaskListRow(task: DemoTask,projectTitle: String?,compact: Boolean,modifier: Modifier,complete: (Int)->Unit,edit: ()->Unit,embedded: Boolean=false,select: ()->Unit) {
+@Composable private fun TaskListRow(task: DemoTask,projectTitle: String?,compact: Boolean,modifier: Modifier,complete: (Int)->Unit,edit: ()->Unit,embedded: Boolean=false) {
     val c=LocalSbrosColors.current
-    TaskRowSurface(modifier.fillMaxWidth().testTag("remaining-task-${task.id}"),17.dp,embedded) {
+    TaskRowSurface(modifier.fillMaxWidth().testTag("remaining-task-${task.id}").clickable(onClickLabel="Редактировать дело",onClick=edit),17.dp,embedded) {
         Row(Modifier.fillMaxWidth().heightIn(min=if(compact)52.dp else 59.dp).padding(start=2.dp,end=7.dp,top=if(compact)3.dp else 5.dp,bottom=if(compact)3.dp else 5.dp),verticalAlignment=Alignment.CenterVertically) {
             Box(Modifier.size(42.dp).testTag("complete-task-${task.id}").semantics {contentDescription="Выполнить ${task.title}"}
                 .clickable(role=Role.Checkbox,onClick={complete(task.id)}),contentAlignment=Alignment.Center) {
                 Box(Modifier.size(21.dp).border(1.5.dp,lerp(c.border,c.primary,.48f),CircleShape))
             }
             Row(Modifier.weight(1f).heightIn(min=44.dp),verticalAlignment=Alignment.CenterVertically) {
-                Column(Modifier.weight(1f).heightIn(min=44.dp).testTag("select-task-${task.id}").clickable(onClick=select),verticalArrangement=Arrangement.Center) {
+                Column(Modifier.weight(1f).heightIn(min=44.dp),verticalArrangement=Arrangement.Center) {
                     Copy(task.title,11.5f,weight=700,line=14.6f,maxLines=1)
                     Spacer(Modifier.height(3.dp))
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -170,7 +162,7 @@ import ru.sbros.app.data.*
                     }
                     if(projectTitle!=null){Spacer(Modifier.height(4.dp));ProjectStepPill(projectTitle,compact=true)}
                 }
-                Box(Modifier.width(32.dp).height(44.dp).testTag("edit-task-${task.id}").semantics {contentDescription="Редактировать ${task.title}"}.clickable(onClick=edit),contentAlignment=Alignment.Center){Glyph(R.drawable.ic_chevron,16.dp,c.muted)}
+                Box(Modifier.width(32.dp).height(44.dp),contentAlignment=Alignment.Center){Glyph(R.drawable.ic_chevron,16.dp,c.muted)}
             }
         }
     }

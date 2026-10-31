@@ -2,13 +2,15 @@ package ru.sbros.app.feature
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.*
 import ru.sbros.app.R
 import ru.sbros.app.core.designsystem.*
@@ -50,10 +52,14 @@ internal fun projectTaskGroups(tasks: List<DemoTask>, projects: List<DemoProject
                 Box(Modifier.rotate(if (expanded) 90f else 0f)) { Glyph(R.drawable.ic_chevron, 16.dp, c.muted) }
             }
             AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                Column {
+                Column(Modifier.fillMaxWidth().background(c.soft).padding(start=12.dp,end=12.dp,top=6.dp,bottom=10.dp),
+                    verticalArrangement=Arrangement.spacedBy(6.dp)) {
                     group.tasks.forEach { task ->
-                        HorizontalDivider(Modifier.padding(horizontal = 15.dp), color = c.border)
-                        key(task.id) { content(task) }
+                        key(task.id) {
+                            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(c.card)) {
+                                content(task)
+                            }
+                        }
                     }
                 }
             }
