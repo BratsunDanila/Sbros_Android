@@ -1,6 +1,8 @@
 package ru.sbros.app.feature
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
@@ -26,15 +28,15 @@ import ru.sbros.app.data.auth.AuthState
     var page by rememberSaveable {mutableStateOf("")}
     var confirmReset by remember {mutableStateOf(false)}
     BackHandler(enabled=page.isNotEmpty()) {page=""}
-    key(page) {
+    Crossfade(targetState=page,modifier=Modifier.fillMaxSize(),animationSpec=tween(100,easing=LinearEasing),label="settings page") {shownPage ->
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val narrow=maxWidth<350.dp
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=20.dp).padding(top=18.dp,bottom=20.dp)) {
-                QuietAction(if(page.isEmpty())"Назад" else "Настройки",R.drawable.ic_left,c.muted2) {if(page.isEmpty())close() else page=""}
+                QuietAction(if(shownPage.isEmpty())"Назад" else "Настройки",R.drawable.ic_left,c.muted2) {if(shownPage.isEmpty())close() else page=""}
                 Spacer(Modifier.height(12.dp))
-                SettingsTitle(when(page){"account"->"Аккаунт";"extra"->"Дополнительно";else->"Настройки"},if(page=="extra")32f else if(narrow)40f else 43f)
+                SettingsTitle(when(shownPage){"account"->"Аккаунт";"extra"->"Дополнительно";else->"Настройки"},if(shownPage=="extra")32f else if(narrow)40f else 43f)
                 Spacer(Modifier.height(22.dp))
-                when(page) {
+                when(shownPage) {
                     "account" -> {
                         Paper(Modifier.fillMaxWidth(),23.dp) {
                             Column(Modifier.padding(18.dp)) {

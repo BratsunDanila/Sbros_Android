@@ -96,7 +96,11 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
             snackbarHost={if(sheet.isEmpty())SnackbarHost(snackbar) {data -> Snackbar(data,containerColor=c.ink,contentColor=c.card,actionColor=c.accent)}},
             bottomBar={BottomNavigation(current,::navigate,when(workspace.scope){"demo"->"Демонстрация · к своим записям";"legacy"->"Прежняя версия · к своим записям";else->null}){scope.launch{graph.settings.leaveExamples()}}}) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).statusBarsPadding()) {
-                NavHost(nav,startDestination="capture",enterTransition={fadeIn(tween(220))+slideInVertically(tween(220)){8}},exitTransition={fadeOut(tween(140))}) {
+                NavHost(nav,startDestination="capture",
+                    enterTransition={fadeIn(tween(100,easing=LinearEasing))},
+                    exitTransition={fadeOut(tween(100,easing=LinearEasing))},
+                    popEnterTransition={fadeIn(tween(100,easing=LinearEasing))},
+                    popExitTransition={fadeOut(tween(100,easing=LinearEasing))}) {
                     composable("tasks") {TasksScreen(state,{nav.navigate("settings")},::completeTask,{sheet="help"},model::selectTask,model::skipTask,::editTask)}
                     composable("thoughts") {ThoughtsScreen(state,{selectedThought=it;nav.navigate("thought/$it")})}
                     composable("capture") {
