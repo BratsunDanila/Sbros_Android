@@ -65,7 +65,7 @@ class AiRepository(private val secrets: SecretStore,private val provider: AiProv
         state.value=AiState(true,verified=true,message="Подключение проверено · доступно моделей: ${models.size}",models=models)
     }
     suspend fun analyze(text: String): List<CaptureProposal> {
-        if(text.isBlank()||text.length>12000)throw AiFailure("Для разбора нужна запись от 1 до 12000 символов.")
+        if(text.isBlank()||text.length>ru.sbros.app.data.CAPTURE_TEXT_LIMIT)throw AiFailure("Для разбора нужна запись от 1 до 5 000 символов. Сократи текст; исходник сохранён.")
         if(!mutex.tryLock())throw AiFailure("Дождись завершения предыдущего действия с ИИ.")
         state.value=state.value.copy(busy=true)
         try {

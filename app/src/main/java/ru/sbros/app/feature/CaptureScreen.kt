@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import ru.sbros.app.R
+import ru.sbros.app.data.CAPTURE_TEXT_LIMIT
 import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.core.speech.appendSpeech
 
@@ -65,14 +66,18 @@ import ru.sbros.app.core.speech.appendSpeech
                         decorationBox={ inner -> Box { if(displayedText.isEmpty()) Copy(stringResource(R.string.capture_hint),12f,c.muted); inner() } })
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                         Copy(stringResource(if(text.isBlank())R.string.no_categories else R.string.imperfect),9f,c.muted,modifier=Modifier.weight(1f))
-                        if(displayedText.isNotEmpty()) Copy("${displayedText.length} зн.",9f,c.muted)
+                        if(displayedText.length>=CAPTURE_TEXT_LIMIT*4/5) Copy("${displayedText.length} / 5 000",9f,if(displayedText.length>CAPTURE_TEXT_LIMIT)c.primary else c.muted)
                     }
                 }
             }
             Spacer(Modifier.height(10.dp))
+            if(displayedText.length>CAPTURE_TEXT_LIMIT) {
+                Copy("Сократи запись до 5 000 символов перед сохранением или разбором. Текст не обрезается.",10f,c.primary,line=15f)
+                Spacer(Modifier.height(8.dp))
+            }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                ActionButton(if(saving)"Сохраняем…" else stringResource(R.string.later),later,Modifier.width(if(narrow)94.dp else 112.dp),primary=false,enabled=text.isNotBlank()&&!saving&&!speechBusy)
-                ActionButton(stringResource(R.string.analyze),analyze,Modifier.weight(1f),enabled=text.isNotBlank()&&!saving&&!speechBusy,icon=R.drawable.ic_arrowright)
+                ActionButton(if(saving)"Сохраняем…" else stringResource(R.string.later),later,Modifier.width(if(narrow)94.dp else 112.dp),primary=false,enabled=text.isNotBlank()&&text.length<=CAPTURE_TEXT_LIMIT&&!saving&&!speechBusy)
+                ActionButton(stringResource(R.string.analyze),analyze,Modifier.weight(1f),enabled=text.isNotBlank()&&text.length<=CAPTURE_TEXT_LIMIT&&!saving&&!speechBusy,icon=R.drawable.ic_arrowright)
             }
         }
         Box(Modifier.align(Alignment.TopEnd).padding(top=9.dp,end=16.dp)) { IconAction(R.drawable.ic_sliders,stringResource(R.string.settings),settings) }

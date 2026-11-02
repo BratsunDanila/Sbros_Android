@@ -60,16 +60,16 @@ class RoomDataRepository(val db: SbrosDatabase): DataRepository {
         if(record==null||record.deletedAt!=null||record.changeId!=revision)throw StaleEditor()
         write(scope,w,old,transform(RecordCodec.decode(old,w.uiState)))
     }
-    override suspend fun draft(scope: String,text: String)=transaction {val w=ensure(scope);w.draft=text.take(12000);dao.putWorkspace(w)}
+    override suspend fun draft(scope: String,text: String)=transaction {val w=ensure(scope);w.draft=text;dao.putWorkspace(w)}
     override suspend fun saveCapture(scope: String,text: String)=transaction {
-        require(text.isNotBlank()&&text.length<=12000)
+        require(text.isNotBlank()&&text.length<=CAPTURE_TEXT_LIMIT)
         val w=ensure(scope);val old=dao.records(scope);val state=RecordCodec.decode(old,w.uiState)
         // Original and draft removal commit atomically, before success is shown.
         w.draft=""
         write(scope,w,old,state.copy(captures=listOf(StoredCapture(uuid(),text,now()))+state.captures))
     }
     suspend fun captureForAnalysis(scope: String,text: String,sourceId: String?): StoredCapture=transaction {
-        require(text.isNotBlank()&&text.length<=12000)
+        require(text.isNotBlank()&&text.length<=CAPTURE_TEXT_LIMIT)
         val w=ensure(scope);val old=dao.records(scope);val state=RecordCodec.decode(old,w.uiState)
         val source=state.captures.find {it.id==sourceId&&it.status=="inbox"}
         val capture=source?.takeIf {it.text==text}?:StoredCapture(uuid(),text,now(),parentId=source?.id)

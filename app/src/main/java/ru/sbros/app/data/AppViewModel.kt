@@ -44,7 +44,7 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
     }
     fun retry(){loadError.value=false;reload.value++}
     fun clearError(){error.value=null}
-    fun draft(text: String){val value=text.take(12000);draft.value=value;draftRevision++;val scope=workspace.value.scope
+    fun draft(text: String){val value=text;draft.value=value;draftRevision++;val scope=workspace.value.scope
         operations.trySend {try{repository.draft(scope,value)}catch(e: Exception){error.value="Черновик пока не сохранён. Не закрывай приложение; повтори ввод после освобождения памяти."}}
     }
     fun appearance(value: Appearance){viewModelScope.launch {try{settings.update(value)}catch(e: Exception){error.value="Не удалось сохранить настройки"}}}
@@ -60,7 +60,9 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
     suspend fun undo(){val receipt=undoReceipt?:return;if(receipt.scope!=workspace.value.scope)return
         try{write {repository.undo(receipt)};undoReceipt=null}catch(e: Exception){error.value="Не удалось отменить изменение. Повтори попытку."}}
     fun favorite(id: Int)=mutate {s->s.copy(thoughts=s.thoughts.map {if(it.id==id)it.copy(favorite=!it.favorite)else it})}
-    suspend fun later(): Boolean {val text=draft.value;if(text.isBlank())return false;val revision=draftRevision;val scope=workspace.value.scope
+    suspend fun later(): Boolean {val text=draft.value;if(text.isBlank())return false
+        if(text.length>CAPTURE_TEXT_LIMIT){error.value="Сократи запись до 5 000 символов. Весь текст сохранён в черновике.";return false}
+        val revision=draftRevision;val scope=workspace.value.scope
         val source=if(savedState.get<String>("captureSourceScope")==scope)savedState.get<String>("captureSource") else null
         return try{write {
             if(source==null)undoReceipt=repository.saveCapture(scope,text).receipt else {repository.captureForAnalysis(scope,text,source);undoReceipt=null}
@@ -73,6 +75,7 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
     }
     suspend fun prepareAnalysis(): String? {
         val text=draft.value;if(text.isBlank())return null
+        if(text.length>CAPTURE_TEXT_LIMIT){error.value="Сократи запись до 5 000 символов перед разбором. Весь текст сохранён в черновике.";return null}
         val target=workspace.value.scope;val revision=draftRevision
         val source=if(savedState.get<String>("captureSourceScope")==target)savedState.get<String>("captureSource") else null
         return try {
