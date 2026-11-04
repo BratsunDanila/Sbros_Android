@@ -64,6 +64,11 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
     suspend fun mutateAwait(expected: Triple<String,Int,String>?=null,transform: (WorkspaceState)->WorkspaceState)=change(expected,transform)
     fun selectTask(id: Int){mutate {it.focusTask(id)}}
     fun skipTask(){mutate {it.nextTask()}}
+    suspend fun skipFocusedTask(id: Int): Boolean {
+        var changed=false
+        val saved=change {s->if(s.focusedAction?.id!=id)s else s.nextTask().also {changed=it.focusedAction?.id!=id}}
+        return saved&&changed
+    }
     suspend fun complete(id: Int): Long? {var token: Long?=null
         val ok=change {s->if(s.tasks.none {it.id==id&&it.status in listOf("next","waiting","someday")})s else {val next=(s.taskUndo.maxOfOrNull{it.token}?:0)+1;token=next;s.completeTask(id,next)}}
         return if(ok)token else null

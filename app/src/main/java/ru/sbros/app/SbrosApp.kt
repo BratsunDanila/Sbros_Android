@@ -96,7 +96,12 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
         }
     }
     val importBackupFile=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->if(!backupBusy)backupImportUri=uri}
-    fun completeTask(id: Int) {scope.launch {model.complete(id)?.let {token->notify("Готово. Хорошая работа.",onUndo={scope.launch {model.undoCompletion(token)}})}}}
+    suspend fun completeTaskWithNotice(id: Int): Boolean {
+        val token=model.complete(id)?:return false
+        notify("Готово. Хорошая работа.",onUndo={scope.launch {model.undoCompletion(token)}})
+        return true
+    }
+    fun completeTask(id: Int) {scope.launch {completeTaskWithNotice(id)}}
     val nav=rememberNavController(); val back by nav.currentBackStackEntryAsState();val current=back?.destination?.route?:"capture"
     fun navigate(route: String) { model.cancelAnalysis();clearNotification();focus.clearFocus();keyboard?.hide();nav.navigate(route) {popUpTo(nav.graph.startDestinationId) {saveState=route!="capture"};launchSingleTop=true;restoreState=route !in setOf("overview","capture")} }
     fun revision(kind: String,id: Int)=state.recordRevisions["$kind:$id"]?:""
@@ -130,7 +135,8 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                     exitTransition={fadeOut(tween(100,easing=LinearEasing))},
                     popEnterTransition={fadeIn(tween(100,easing=LinearEasing))},
                     popExitTransition={fadeOut(tween(100,easing=LinearEasing))}) {
-                    composable("tasks") {TasksScreen(state,{nav.navigate("settings")},::completeTask,{selectedTask=state.focusedAction?.id?:0;sheet="help"},model::selectTask,model::skipTask,::editTask)}
+                    composable("tasks") {TasksScreen(state,{nav.navigate("settings")},::completeTask,{selectedTask=state.focusedAction?.id?:0;sheet="help"},model::selectTask,model::skipTask,::editTask,
+                        swipeComplete=::completeTaskWithNotice,swipeSkip=model::skipFocusedTask)}
                     composable("thoughts") {ThoughtsScreen(state,{selectedThought=it;nav.navigate("thought/$it")})}
                     composable("capture") {
                         val speech=ru.sbros.app.core.speech.rememberSpeechInput(draft){text->clearNotification();model.draft(text)}

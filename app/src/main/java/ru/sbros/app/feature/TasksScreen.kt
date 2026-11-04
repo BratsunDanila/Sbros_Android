@@ -1,6 +1,16 @@
 package ru.sbros.app.feature
 
 import androidx.compose.animation.core.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.sign
+import android.os.SystemClock
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -25,7 +35,8 @@ import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
 
 @Composable fun TasksScreen(state: WorkspaceState, settings: ()->Unit, complete: (Int)->Unit,
-    help: ()->Unit, select: (Int)->Unit, skip: ()->Unit, edit: (Int)->Unit = {}) {
+    help: ()->Unit, select: (Int)->Unit, skip: ()->Unit, edit: (Int)->Unit = {},
+    swipeComplete: suspend (Int)->Boolean={complete(it);true},swipeSkip: suspend (Int)->Boolean={skip();true}) {
     val c=LocalSbrosColors.current
     val listState=rememberLazyListState()
     val compact=LocalConfiguration.current.screenHeightDp<=740
@@ -49,7 +60,7 @@ import ru.sbros.app.data.*
                     Copy(if(task==null)stringResource(R.string.free_now) else stringResource(R.string.task_position,all.indexOfFirst {it.id==task.id}+1,all.size),10f,c.muted,650)
                 }
                 Spacer(Modifier.height(12.dp))
-                TaskDeck(task,state.projects.find {it.id==task?.projectId}?.title,compact,narrow,complete,skip,edit)
+                TaskDeck(task,state.projects.find {it.id==task?.projectId}?.title,compact,narrow,all.size>1,complete,skip,edit,swipeComplete,swipeSkip)
             }
             if(task!=null) item(key="help",contentType="help") {
                 Spacer(Modifier.height(11.dp))
@@ -87,8 +98,12 @@ import ru.sbros.app.data.*
     }
 }
 
-@Composable private fun TaskDeck(task: ActionTask?,projectTitle: String?,compact: Boolean,narrow: Boolean,complete: (Int)->Unit,skip: ()->Unit,edit: (Int)->Unit) {
+@Composable private fun TaskDeck(task: ActionTask?,projectTitle: String?,compact: Boolean,narrow: Boolean,canSkip: Boolean,
+    complete: (Int)->Unit,skip: ()->Unit,edit: (Int)->Unit,swipeComplete: suspend (Int)->Boolean,swipeSkip: suspend (Int)->Boolean) {
     val c=LocalSbrosColors.current
+    // Keep action coroutines alive when the focused task changes to the next card.
+    val scope=rememberCoroutineScope()
+    val currentTaskId by rememberUpdatedState(task?.id)
     Box(Modifier.fillMaxWidth().padding(bottom=13.dp)) {
         Box(Modifier.matchParentSize().padding(horizontal=25.dp).offset(y=10.dp).background(c.accent,RoundedCornerShape(25.dp)).border(1.dp,c.border,RoundedCornerShape(25.dp)))
         Box(Modifier.matchParentSize().padding(horizontal=13.dp).offset(y=5.dp).background(c.soft,RoundedCornerShape(25.dp)).border(1.dp,c.border,RoundedCornerShape(25.dp)))
@@ -100,21 +115,85 @@ import ru.sbros.app.data.*
             }
         } else key(task.id) {
             var drag by remember {mutableFloatStateOf(0f)}
-            var dragging by remember {mutableStateOf(false)}
+            var animating by remember {mutableStateOf(false)}
+            var busy by remember {mutableStateOf(false)}
+            var animationJob by remember {mutableStateOf<Job?>(null)}
             val density=LocalDensity.current
-            val translation by animateFloatAsState(drag*.55f,if(dragging)snap() else spring(stiffness=450f),label="task swipe")
+            val haptic=LocalHapticFeedback.current
+            var width by remember {mutableFloatStateOf(with(density){300.dp.toPx()})}
+            val movement=remember {Animatable(0f)}
+            val appearance=remember {Animatable(.65f)}
+            LaunchedEffect(task.id){appearance.animateTo(1f,tween(130))}
+            val translation=if(animating)movement.value else drag
             val onComplete by rememberUpdatedState(complete)
             val onSkip by rememberUpdatedState(skip)
+            val onSwipeComplete by rememberUpdatedState(swipeComplete)
+            val onSwipeSkip by rememberUpdatedState(swipeSkip)
+            val currentCanSkip by rememberUpdatedState(canSkip)
+            val threshold=width*.24f
+            val progress=(abs(translation)/threshold).coerceIn(0f,1f)
+            val swipeColor=if(translation>=0)c.good else c.primary
+            val tintProgress=if(translation<0&&!canSkip)0f else progress
+            fun settle(direction: Int=0) {
+                val start=if(animating)movement.value else drag
+                animationJob?.cancel()
+                busy=direction!=0
+                animationJob=scope.launch {
+                    movement.snapTo(start);animating=true
+                    if(direction!=0) {
+                        movement.animateTo(direction*width*1.2f,tween(160,easing=FastOutLinearInEasing))
+                        if(currentTaskId!=task.id)return@launch
+                        val applied=if(direction>0)onSwipeComplete(task.id)else onSwipeSkip(task.id)
+                        if(applied)return@launch
+                    }
+                    movement.animateTo(0f,spring(dampingRatio=1f,stiffness=600f))
+                    drag=0f;animating=false;busy=false
+                }
+            }
             Paper(Modifier.fillMaxWidth().testTag("focused-task-card").heightIn(min=if(compact)222.dp else 253.dp)
-                .clickable(interactionSource=remember {MutableInteractionSource()},indication=null,onClickLabel="Редактировать дело",onClick={edit(task.id)})
-                .graphicsLayer {translationX=translation;rotationZ=translation*.012f}
+                .onSizeChanged {if(it.width>0)width=it.width.toFloat()}
+                // Listen outside the moving layer so pointer coordinates stay stable.
                 .pointerInput(task.id) {
-                    detectHorizontalDragGestures(onDragStart={dragging=true},onDragEnd={
-                        val distance=drag/density.density
-                        dragging=false;drag=0f
-                        if(distance>100f)onComplete(task.id) else if(distance< -100f)onSkip()
-                    },onDragCancel={dragging=false;drag=0f},onHorizontalDrag={change,amount->change.consume();drag+=amount})
-                },25.dp) {
+                    val velocity=VelocityTracker()
+                    var lastPosition=Offset.Zero
+                    var thresholdFeedback=false
+                    detectHorizontalDragGestures(onDragStart={
+                        if(!busy){
+                            val start=if(animating)movement.value else drag
+                            animationJob?.cancel();drag=start;animating=false
+                            velocity.resetTracking();thresholdFeedback=false
+                        }
+                    },onDragEnd={
+                        if(!busy) {
+                            velocity.addPosition(SystemClock.uptimeMillis(),lastPosition)
+                            val speed=velocity.calculateVelocity().x
+                            val fastSpeed=with(density){650.dp.toPx()}
+                            val intentionalFling=abs(drag)>=with(density){24.dp.toPx()}&&abs(speed)>=fastSpeed&&drag*speed>0
+                            val reversing=abs(speed)>=fastSpeed&&drag*speed<0
+                            val commit=(abs(drag)>=width*.24f&&!reversing)||intentionalFling
+                            val direction=if(commit&&(drag>0||currentCanSkip))sign(drag).toInt()else 0
+                            if(direction!=0&&!thresholdFeedback)haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            settle(direction)
+                        }
+                    },onDragCancel={if(!busy)settle()},onHorizontalDrag={change,amount->
+                        if(!busy) {
+                            change.consume();drag+=amount
+                            lastPosition=change.position
+                            velocity.addPosition(change.uptimeMillis,change.position)
+                            if(!thresholdFeedback&&abs(drag)>=width*.24f&&(drag>0||currentCanSkip)) {
+                                thresholdFeedback=true;haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                        }
+                    })
+                }
+                .graphicsLayer {
+                    translationX=translation;rotationZ=(translation/width*6f).coerceIn(-2f,2f)
+                    val departure=((abs(translation)-threshold)/(width-threshold)).coerceIn(0f,1f)
+                    alpha=appearance.value*(1f-departure*.45f)
+                }
+                .clickable(enabled=!busy,interactionSource=remember {MutableInteractionSource()},indication=null,onClickLabel="Редактировать дело",onClick={edit(task.id)}),25.dp) {
+                Box(Modifier.matchParentSize().background(swipeColor.copy(alpha=tintProgress*.075f))
+                    .border((1f+tintProgress*.5f).dp,lerp(c.border,swipeColor,tintProgress*.75f),RoundedCornerShape(25.dp)))
                 Rings(Modifier.matchParentSize().graphicsLayer {scaleX=.93f;scaleY=.93f;transformOrigin=TransformOrigin(1f,0f)},true)
                 Copy("✧",19f,c.primary.copy(alpha=.64f),modifier=Modifier.align(Alignment.TopEnd).padding(top=88.dp,end=123.dp))
                 Column(Modifier.fillMaxWidth().padding(start=19.dp,end=19.dp,top=19.dp,bottom=14.dp)) {
@@ -134,11 +213,10 @@ import ru.sbros.app.data.*
                     }
                     HorizontalDivider(color=c.border)
                     Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                        QuietAction(stringResource(R.string.another),R.drawable.ic_arrowleft,c.muted2,onClick=skip)
-                        QuietAction(stringResource(R.string.done),R.drawable.ic_arrowright,c.good,trailing=true) {complete(task.id)}
+                        QuietAction(stringResource(R.string.another),R.drawable.ic_arrowleft,c.muted2){if(!busy)onSkip()}
+                        QuietAction(stringResource(R.string.done),R.drawable.ic_arrowright,c.good,trailing=true) {if(!busy)onComplete(task.id)}
                     }
                 }
-                if(kotlin.math.abs(drag/density.density)>40f) Eyebrow(if(drag>0)"СДЕЛАНО ✓" else "ДРУГОЕ →",if(drag>0)c.good else c.primary)
             }
         }
     }
