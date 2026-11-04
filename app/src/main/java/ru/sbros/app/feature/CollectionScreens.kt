@@ -168,7 +168,7 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
             Copy(project.title,27f,weight=750,line=32f,tracking=-1.35f)
             Spacer(Modifier.height(14.dp))
             if(project.outcome.isNotBlank()) {
-                Eyebrow("Результат",c.muted2,8f)
+                Eyebrow("Из сброса:",c.muted2,8f)
                 Spacer(Modifier.height(6.dp));Copy(project.outcome,12.5f,c.muted2,line=20f,maxLines=4)
             } else {
                 Row(verticalAlignment=Alignment.CenterVertically) {
