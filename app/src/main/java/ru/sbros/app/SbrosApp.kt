@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.map
 import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
+import ru.sbros.app.data.ai.taskAdviceContext
 import ru.sbros.app.feature.*
 import ru.sbros.app.data.local.BACKUP_MAX_BYTES
 import ru.sbros.app.data.local.exportBackup
@@ -129,7 +130,7 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                     exitTransition={fadeOut(tween(100,easing=LinearEasing))},
                     popEnterTransition={fadeIn(tween(100,easing=LinearEasing))},
                     popExitTransition={fadeOut(tween(100,easing=LinearEasing))}) {
-                    composable("tasks") {TasksScreen(state,{nav.navigate("settings")},::completeTask,{selectedTask=state.focusedAction?.id?:0;editorRevision=revision("action",selectedTask);sheet="help"},model::selectTask,model::skipTask,::editTask)}
+                    composable("tasks") {TasksScreen(state,{nav.navigate("settings")},::completeTask,{selectedTask=state.focusedAction?.id?:0;sheet="help"},model::selectTask,model::skipTask,::editTask)}
                     composable("thoughts") {ThoughtsScreen(state,{selectedThought=it;nav.navigate("thought/$it")})}
                     composable("capture") {
                         val speech=ru.sbros.app.core.speech.rememberSpeechInput(draft){text->clearNotification();model.draft(text)}
@@ -203,9 +204,12 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(horizontal=20.dp).padding(bottom=24.dp)) {
                 when(sheet) {
                     "ai-settings" -> AiSettingsSheet(ai,graph.ai::save,graph.ai::remove,graph.ai::check){sheet=""}
-                    "help" -> FirstStepSheet(state.tasks.find {it.id==selectedTask},ai.hasKey,aiTextAllowed,
-                        suggest={consent->if(consent)graph.settings.allowAiText();graph.ai.firstStep(state.tasks.find {it.id==selectedTask}?.title?:throw ru.sbros.app.data.ai.AiFailure("Дело больше недоступно."))},
-                        save={title->model.saveFirstStep(selectedTask,editorRevision,title)},openAi={sheet="ai-settings"},close={sheet=""})
+                    "help" -> {
+                        val adviceContext=remember(state.tasks,state.projects,selectedTask){state.taskAdviceContext(selectedTask)}
+                        key(adviceContext) {TaskAdviceSheet(adviceContext,ai.hasKey,aiTextAllowed,
+                            suggest={consent->if(consent)graph.settings.allowAiText();graph.ai.advice(adviceContext?:throw ru.sbros.app.data.ai.AiFailure("Дело больше недоступно."))},
+                            openAi={sheet="ai-settings"},close={sheet=""})}
+                    }
                     "event" -> EventSheet(state.events.find {it.id==selectedEvent},eventDate,{e ->val saved=model.mutateAwait(if(selectedEvent!=0)Triple("event",selectedEvent,editorRevision)else null) {s->val event=if(e.id==0)e.copy(id=s.nextLocalId("event"))else e;s.copy(events=s.events.filter {it.id!=event.id}+event)};if(saved)sheet="";saved},{val saved=model.mutateAwait(Triple("event",selectedEvent,editorRevision)) {s->s.copy(events=s.events.filter {it.id!=selectedEvent})};if(saved){sheet="";notify("Событие удалено",true)};saved})
                     "task-edit" -> state.tasks.find {it.id==selectedTask}?.let {task->TaskEditor(task,{sheet=""},projects=state.projects) {title,status,area,dueDate,projectId->
                         val saved=model.saveTask(task.id,title,status,area,projectId,editorRevision,dueDate);if(saved)sheet="";saved

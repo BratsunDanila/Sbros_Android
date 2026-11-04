@@ -191,14 +191,6 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
         if(current.original.isNotBlank()&&current.phase!="saved")resumeCapture(StoredCapture(current.captureId,current.original,""))
     }
     suspend fun reset(){write {repository.resetDemo()}}
-    suspend fun saveFirstStep(taskId: Int,revision: String,title: String): Boolean {
-        if(title.isBlank()||title.length>500)return false
-        return change(Triple("action",taskId,revision)) {s->
-            val task=s.tasks.first {it.id==taskId&&it.status!="done"}
-            val step=ActionTask(s.nextLocalId("action"),title.trim(),task.area,0,"Первый шаг: ${task.title}",projectId=task.projectId,captureId=task.captureId)
-            s.copy(tasks=s.tasks+step).focusTask(step.id)
-        }
-    }
     suspend fun saveTask(id: Int?,title: String,status: String,area: String,projectId: Int?=null,revision: String?=null,dueDate: String?=workspace.value.data.tasks.firstOrNull {it.id==id}?.dueDate): Boolean {
         if(title.isBlank()||title.length>500||!validTaskDeadline(dueDate))return false
         return change(if(id!=null&&revision!=null)Triple("action",id,revision)else null) {s->require(id==null||s.tasks.any{it.id==id});require(projectId==null||s.projects.any{it.id==projectId});require(status in listOf("next","waiting","someday","done"));s.saveTask(id,title,status,area,projectId,dueDate)}

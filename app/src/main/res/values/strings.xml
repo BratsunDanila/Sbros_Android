@@ -19,7 +19,7 @@
     <string name="no_categories">Никаких категорий и обязательных полей.</string>
     <string name="imperfect">Необязательно формулировать идеально.</string>
     <string name="later">На потом</string><string name="analyze">Разобрать</string>
-    <string name="first_step">Помочь сделать первый шаг</string>
+    <string name="first_step">Совет по делу</string>
     <string name="suggested_now">ПРЕДЛАГАЮ СЕЙЧАС</string><string name="free_now">Пока свободно</string>
     <string name="task_position">%1$d из %2$d</string><string name="next_action">Следующее действие</string>
     <string name="one_at_a_time">ОДНО ДЕЛО ЗА РАЗ</string><string name="small_start">Можно начать с самого малого.</string>

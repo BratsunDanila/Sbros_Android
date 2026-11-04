@@ -2,6 +2,7 @@ package ru.sbros.app.feature
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Checkbox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -14,47 +15,55 @@ import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
 import ru.sbros.app.data.ai.*
 
-@Composable fun FirstStepSheet(task: ActionTask?,hasKey: Boolean,allowed: Boolean,
-    suggest: suspend (Boolean)->String,save: suspend (String)->Boolean,openAi: ()->Unit,close: ()->Unit) {
+@Composable fun TaskAdviceSheet(context: TaskAdviceContext?,hasKey: Boolean,allowed: Boolean,
+    suggest: suspend (Boolean)->String,openAi: ()->Unit,close: ()->Unit) {
     val c=LocalSbrosColors.current
     val scope=rememberCoroutineScope()
-    var text by rememberSaveable(task?.id) {mutableStateOf("")}
+    var text by rememberSaveable {mutableStateOf("")}
     var consent by rememberSaveable {mutableStateOf(false)}
     var busy by remember {mutableStateOf(false)}
     var failure by remember {mutableStateOf<String?>(null)}
-    Copy("Маленький первый шаг",23f,weight=750,tracking=-1f)
+    Copy("Совет по делу",23f,weight=750,tracking=-1f)
     Spacer(Modifier.height(8.dp))
-    if(task==null) {
-        Copy("Сначала выбери дело на главной карточке.",color=c.muted2)
+    if(context==null) {
+        Copy("Это дело больше недоступно. Выбери другое на главной карточке.",color=c.muted2)
         Spacer(Modifier.height(18.dp));ActionButton("Понятно",close,Modifier.fillMaxWidth())
         return
     }
-    Copy(task.title,15f,line=22f)
-    Spacer(Modifier.height(8.dp))
-    Copy("Начни с одного простого действия. Оно добавится отдельным делом; исходное дело останется.",12f,c.muted2,line=19f)
-    if(!allowed)Row(verticalAlignment=Alignment.CenterVertically) {
-        Checkbox(consent,{if(!busy)consent=it})
-        Copy("Разрешаю передать название этого дела в Token Harbor для подсказки.",11f,c.muted2,modifier=Modifier.weight(1f),line=17f)
+    context.project?.let {project->
+        ProjectStepPill(project.title,compact=true)
+        Spacer(Modifier.height(10.dp))
     }
-    Spacer(Modifier.height(14.dp))
-    ActionButton(if(busy)"Подбираем шаг…" else if(text.isBlank())"Предложить с ИИ" else "Другая подсказка",{
+    Copy(context.task.title,16f,weight=700,line=23f)
+    Spacer(Modifier.height(8.dp))
+    Copy(if(context.project!=null)"Подсказка с учётом цели проекта и связанных шагов." else "Подсказка, как подойти к этому делу.",12f,c.muted2,line=19f)
+    if(!allowed&&hasKey)Row(verticalAlignment=Alignment.CenterVertically) {
+        Checkbox(consent,{if(!busy)consent=it})
+        Copy("Разрешаю передать это дело, его пояснение и контекст проекта в Token Harbor для совета.",11f,c.muted2,modifier=Modifier.weight(1f),line=17f)
+    }
+    if(text.isNotBlank()) {
+        Spacer(Modifier.height(18.dp))
+        Paper(Modifier.fillMaxWidth(),20.dp) {
+            Column(Modifier.padding(17.dp)) {
+                Eyebrow("Совет",size=9f)
+                Spacer(Modifier.height(9.dp))
+                SelectionContainer {Copy(text,13f,line=21f)}
+            }
+        }
+    }
+    failure?.let {Spacer(Modifier.height(12.dp));Copy(it,12f,c.muted2,line=19f)}
+    Spacer(Modifier.height(18.dp))
+    ActionButton(when {busy->"Готовим совет…";!hasKey->"Настроить ИИ";failure!=null->"Попробовать ещё раз";text.isBlank()->"Получить совет";else->"Другой совет"},{
         if(!busy) {
             if(!hasKey)openAi()
-            else if(!allowed&&!consent)failure="Разреши отправку названия или напиши шаг самостоятельно."
-            else {busy=true;failure=null;scope.launch {
+            else if(allowed||consent) {busy=true;failure=null;scope.launch {
                 try {text=suggest(consent)}
                 catch(e: CancellationException){throw e}
-                catch(e: Exception){failure=(e as? AiFailure)?.publicMessage?:"Не удалось получить подсказку. Попробуй ещё раз."}
+                catch(e: Exception){failure=(e as? AiFailure)?.publicMessage?:"Не удалось получить совет. Попробуй ещё раз."}
                 finally {busy=false}
             }}
         }
-    },Modifier.fillMaxWidth(),primary=false,enabled=!busy)
-    ReferenceField(text,{if(!busy)text=it.take(500)},"Первое действие",placeholder="Например: открыть документ и написать заголовок")
-    failure?.let {Spacer(Modifier.height(10.dp));Copy(it,12f,c.muted2,line=19f)}
-    Spacer(Modifier.height(18.dp))
-    ActionButton(if(busy)"Подожди…" else "Добавить шаг",{
-        if(!busy&&text.isNotBlank()){busy=true;scope.launch {try {if(save(text.trim()))close()}finally{busy=false}}}
-    },Modifier.fillMaxWidth(),enabled=!busy&&text.isNotBlank())
+    },Modifier.fillMaxWidth(),enabled=!busy&&(!hasKey||allowed||consent))
     Spacer(Modifier.height(8.dp));ActionButton("Закрыть",close,Modifier.fillMaxWidth(),primary=false)
 }
 
