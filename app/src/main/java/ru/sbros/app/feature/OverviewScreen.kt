@@ -12,7 +12,7 @@ import ru.sbros.app.R
 import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
 
-@Composable fun OverviewScreen(state: DemoState, settings: ()->Unit, open: (String)->Unit) {
+@Composable fun OverviewScreen(state: WorkspaceState, settings: ()->Unit, open: (String)->Unit) {
     val c=LocalSbrosColors.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=if(maxWidth<350.dp)15.dp else 20.dp).padding(top=ContentTopPadding,bottom=24.dp)) {

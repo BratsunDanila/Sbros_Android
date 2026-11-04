@@ -24,7 +24,7 @@ import ru.sbros.app.R
 import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
 
-@Composable fun TasksScreen(state: DemoState, settings: ()->Unit, complete: (Int)->Unit,
+@Composable fun TasksScreen(state: WorkspaceState, settings: ()->Unit, complete: (Int)->Unit,
     help: ()->Unit, select: (Int)->Unit, skip: ()->Unit, edit: (Int)->Unit = {}) {
     val c=LocalSbrosColors.current
     val listState=rememberLazyListState()
@@ -87,7 +87,7 @@ import ru.sbros.app.data.*
     }
 }
 
-@Composable private fun TaskDeck(task: DemoTask?,projectTitle: String?,compact: Boolean,narrow: Boolean,complete: (Int)->Unit,skip: ()->Unit,edit: (Int)->Unit) {
+@Composable private fun TaskDeck(task: ActionTask?,projectTitle: String?,compact: Boolean,narrow: Boolean,complete: (Int)->Unit,skip: ()->Unit,edit: (Int)->Unit) {
     val c=LocalSbrosColors.current
     Box(Modifier.fillMaxWidth().padding(bottom=13.dp)) {
         Box(Modifier.matchParentSize().padding(horizontal=25.dp).offset(y=10.dp).background(c.accent,RoundedCornerShape(25.dp)).border(1.dp,c.border,RoundedCornerShape(25.dp)))
@@ -144,7 +144,7 @@ import ru.sbros.app.data.*
     }
 }
 
-@Composable private fun TaskListRow(task: DemoTask,projectTitle: String?,compact: Boolean,modifier: Modifier,complete: (Int)->Unit,edit: ()->Unit,embedded: Boolean=false) {
+@Composable private fun TaskListRow(task: ActionTask,projectTitle: String?,compact: Boolean,modifier: Modifier,complete: (Int)->Unit,edit: ()->Unit,embedded: Boolean=false) {
     val c=LocalSbrosColors.current
     TaskRowSurface(modifier.fillMaxWidth().testTag("remaining-task-${task.id}").clickable(onClickLabel="Редактировать дело",onClick=edit),17.dp,embedded) {
         Row(Modifier.fillMaxWidth().heightIn(min=if(compact)52.dp else 59.dp).padding(start=2.dp,end=7.dp,top=if(compact)3.dp else 5.dp,bottom=if(compact)3.dp else 5.dp),verticalAlignment=Alignment.CenterVertically) {

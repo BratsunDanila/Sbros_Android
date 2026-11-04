@@ -4,12 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ru.sbros.app.core.designsystem.*
-import ru.sbros.app.data.DemoState
+import ru.sbros.app.data.WorkspaceState
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-@Composable fun CaptureHistorySheet(state: DemoState,close: ()->Unit) {
+@Composable fun CaptureHistorySheet(state: WorkspaceState,close: ()->Unit) {
     val c=LocalSbrosColors.current
     Copy("История сбросов",23f,weight=750)
     Spacer(Modifier.height(8.dp));Copy("Исходные записи сохраняются целиком.",color=c.muted2)

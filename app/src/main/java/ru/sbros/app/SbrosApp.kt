@@ -1,6 +1,8 @@
 package ru.sbros.app
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -22,10 +24,15 @@ import androidx.compose.ui.unit.*
 import androidx.navigation.compose.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.map
 import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
 import ru.sbros.app.feature.*
+import ru.sbros.app.data.local.BACKUP_MAX_BYTES
+import ru.sbros.app.data.local.exportBackup
+import ru.sbros.app.data.local.importBackup
 
 data class Destination(val route: String,val label: Int,val icon: Int)
 private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic_bolt_nav),Destination("thoughts",R.string.thoughts,R.drawable.ic_feather_nav),Destination("capture",R.string.capture,R.drawable.ic_mic_nav),Destination("calendar",R.string.calendar,R.drawable.ic_calendar_nav),Destination("overview",R.string.overview,R.drawable.ic_review_nav))
@@ -35,6 +42,7 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
     val graph=(LocalContext.current.applicationContext as SbrosApplication).graph
     val auth by graph.auth.state.collectAsState()
     val ai by graph.ai.state.collectAsState()
+    val aiTextAllowed by graph.settings.aiTextConsent.collectAsState(initial=false)
     val online by graph.network.online.collectAsState()
     val hasLegacy by remember {graph.data.dao.observeLegacy().map{it>0}}.collectAsState(initial=false)
     val sync by graph.sync.state.collectAsState()
@@ -55,6 +63,10 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
     val conflicts by remember(workspace.scope){graph.data.dao.observeConflicts(workspace.scope)}.collectAsState(initial=emptyList())
     val records by remember(workspace.scope){graph.data.dao.observe(workspace.scope)}.collectAsState(initial=emptyList())
     val snackbar=remember { SnackbarHostState() }; val scope=rememberCoroutineScope()
+    val context=LocalContext.current
+    var backupBusy by remember {mutableStateOf(false)}
+    var backupExportScope by rememberSaveable {mutableStateOf("")}
+    var backupImportUri by remember {mutableStateOf<android.net.Uri?>(null)}
     var notificationJob by remember {mutableStateOf<Job?>(null)}
     val focus=androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard=androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -67,6 +79,22 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
             if(result==SnackbarResult.ActionPerformed) {if(onUndo!=null)onUndo() else model.undo()}
         }
     }
+    val exportBackupFile=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {uri->
+        if(uri!=null&&!backupBusy&&backupExportScope==workspace.scope) {
+            backupBusy=true
+            notify("Сохраняем резервную копию…")
+            scope.launch {
+                try {
+                    model.flushDraft()
+                    val bytes=graph.data.exportBackup(backupExportScope)
+                    withContext(Dispatchers.IO) {context.contentResolver.openOutputStream(uri,"wt")?.use {it.write(bytes)}?:error("File unavailable")}
+                    notify("Резервная копия сохранена")
+                } catch(e: Exception) {if(e is kotlinx.coroutines.CancellationException)throw e;model.error.value="Не удалось сохранить резервную копию. Проверь доступ к файлу и свободное место."}
+                finally {backupBusy=false}
+            }
+        }
+    }
+    val importBackupFile=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->if(!backupBusy)backupImportUri=uri}
     fun completeTask(id: Int) {scope.launch {model.complete(id)?.let {token->notify("Готово. Хорошая работа.",onUndo={scope.launch {model.undoCompletion(token)}})}}}
     val nav=rememberNavController(); val back by nav.currentBackStackEntryAsState();val current=back?.destination?.route?:"capture"
     fun navigate(route: String) { model.cancelAnalysis();clearNotification();focus.clearFocus();keyboard?.hide();nav.navigate(route) {popUpTo(nav.graph.startDestinationId) {saveState=route!="capture"};launchSingleTop=true;restoreState=route !in setOf("overview","capture")} }
@@ -101,7 +129,7 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                     exitTransition={fadeOut(tween(100,easing=LinearEasing))},
                     popEnterTransition={fadeIn(tween(100,easing=LinearEasing))},
                     popExitTransition={fadeOut(tween(100,easing=LinearEasing))}) {
-                    composable("tasks") {TasksScreen(state,{nav.navigate("settings")},::completeTask,{sheet="help"},model::selectTask,model::skipTask,::editTask)}
+                    composable("tasks") {TasksScreen(state,{nav.navigate("settings")},::completeTask,{selectedTask=state.focusedAction?.id?:0;editorRevision=revision("action",selectedTask);sheet="help"},model::selectTask,model::skipTask,::editTask)}
                     composable("thoughts") {ThoughtsScreen(state,{selectedThought=it;nav.navigate("thought/$it")})}
                     composable("capture") {
                         val speech=ru.sbros.app.core.speech.rememberSpeechInput(draft){text->clearNotification();model.draft(text)}
@@ -146,7 +174,9 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                         switchWorkspace={scope.launch {graph.settings.mode(if(workspace.scope.startsWith("user:"))"local" else "account")}},
                         openConflicts={sheet="sync-conflicts"},openVersions={sheet="conflict-history"},openAi={sheet="ai-settings"},
                         examples={scope.launch {graph.settings.mode("demo")}},leaveExamples={scope.launch {graph.settings.leaveExamples()}},legacy={scope.launch {graph.settings.mode("legacy")}},
-                        resetDemo={scope.launch {model.reset();notify("Примеры восстановлены")}},close={nav.popBackStack()}) }
+                        resetDemo={scope.launch {model.reset();notify("Примеры восстановлены")}},close={nav.popBackStack()},
+                        exportBackup={if(!backupBusy){backupExportScope=workspace.scope;exportBackupFile.launch("Сброс-${java.time.LocalDate.now()}.json")}},
+                        importBackup={if(!backupBusy)importBackupFile.launch(arrayOf("application/json","text/plain","application/octet-stream"))}) }
                     composable("overview/shelf/{kind}") {entry->
                         val key=entry.arguments?.getString("kind")?:"next"
                         CollectionScreen(key,state,{nav.popBackStack()},{addEntry(key)},{id->nav.navigate("overview/project/$id")},::editTask,::editMaterial,::completeTask)
@@ -170,10 +200,9 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(horizontal=20.dp).padding(bottom=24.dp)) {
                 when(sheet) {
                     "ai-settings" -> AiSettingsSheet(ai,graph.ai::save,graph.ai::remove,graph.ai::check){sheet=""}
-                    "help" -> {
-                        InfoSheet("Маленький первый шаг","Подсказки к отдельным делам пока не подключены. ИИ уже умеет разбирать новые записи на экране «Сброс».") {sheet=""}
-                        Spacer(Modifier.height(9.dp));ActionButton("Настройки ИИ",{sheet="ai-settings"},Modifier.fillMaxWidth(),primary=false)
-                    }
+                    "help" -> FirstStepSheet(state.tasks.find {it.id==selectedTask},ai.hasKey,aiTextAllowed,
+                        suggest={consent->if(consent)graph.settings.allowAiText();graph.ai.firstStep(state.tasks.find {it.id==selectedTask}?.title?:throw ru.sbros.app.data.ai.AiFailure("Дело больше недоступно."))},
+                        save={title->model.saveFirstStep(selectedTask,editorRevision,title)},openAi={sheet="ai-settings"},close={sheet=""})
                     "event" -> EventSheet(state.events.find {it.id==selectedEvent},eventDate,{e ->val saved=model.mutateAwait(if(selectedEvent!=0)Triple("event",selectedEvent,editorRevision)else null) {s->val event=if(e.id==0)e.copy(id=s.nextLocalId("event"))else e;s.copy(events=s.events.filter {it.id!=event.id}+event)};if(saved)sheet="";saved},{val saved=model.mutateAwait(Triple("event",selectedEvent,editorRevision)) {s->s.copy(events=s.events.filter {it.id!=selectedEvent})};if(saved){sheet="";notify("Событие удалено",true)};saved})
                     "task-edit" -> state.tasks.find {it.id==selectedTask}?.let {task->TaskEditor(task,{sheet=""},projects=state.projects) {title,status,area,dueDate,projectId->
                         val saved=model.saveTask(task.id,title,status,area,projectId,editorRevision,dueDate);if(saved)sheet="";saved
@@ -188,8 +217,8 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                     "material-edit" -> state.materials.find {it.id==selectedMaterial}?.let {material->MaterialEditor(material,{sheet=""},{title,body->
                         val saved=model.saveMaterial(material.id,title,body,editorRevision);if(saved)sheet="";saved
                     },{val saved=model.deleteMaterial(material.id,editorRevision);if(saved){sheet="";notify("Материал удалён",true)};saved})}
-                    "edit-thought","continue","to-action" -> state.thoughts.find {it.id==selectedThought}?.let {thought -> ThoughtEditSheet(thought,sheet,{updated ->val saved=model.mutateAwait(Triple("thought",thought.id,editorRevision)) {s->s.copy(thoughts=s.thoughts.map {if(it.id==thought.id)updated else it})};if(saved)sheet="";saved},{title ->val saved=model.mutateAwait {s->s.copy(tasks=s.tasks+DemoTask(s.nextLocalId("action"),title,"Личное",0,"Из раздела «Мысли»",captureId=thought.captureId))};if(saved){sheet="";notify("Действие добавлено. Исходная мысль сохранена.")};saved}) }
-                    "related" -> InfoSheet("Похожие мысли","Семантический поиск не подключён. Поиск по словам доступен в разделе «Мысли».") {sheet=""}
+                    "edit-thought","continue","to-action" -> state.thoughts.find {it.id==selectedThought}?.let {thought -> ThoughtEditSheet(thought,sheet,{updated ->val saved=model.mutateAwait(Triple("thought",thought.id,editorRevision)) {s->s.copy(thoughts=s.thoughts.map {if(it.id==thought.id)updated else it})};if(saved)sheet="";saved},{title ->val saved=model.mutateAwait {s->s.copy(tasks=s.tasks+ActionTask(s.nextLocalId("action"),title,"Личное",0,"Из раздела «Мысли»",captureId=thought.captureId))};if(saved){sheet="";notify("Действие добавлено. Исходная мысль сохранена.")};saved}) }
+                    "related" -> RelatedThoughtsSheet(state.thoughts.find {it.id==selectedThought},state.thoughts,{id->sheet="";selectedThought=id;nav.navigate("thought/$id"){launchSingleTop=true}},{sheet=""})
                     "thought-source" -> state.thoughts.find {it.id==selectedThought}?.sourceText?.let {InfoSheet(stringResource(R.string.thought_source),it){sheet=""}}
                     "history" -> CaptureHistorySheet(state){sheet=""}
                     "sync-conflicts" -> SyncConflictsSheet(conflicts,{id,keepLocal->try{val user=auth.user?:error("No account");graph.sync.resolve(user.id,id,keepLocal);graph.scheduler.enqueue(user.id);true}catch(e: Exception){false}}){sheet=""}
@@ -203,6 +232,27 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
         }
     }
     if(storageError!=null&&loaded)AlertDialog(onDismissRequest=model::clearError,title={Copy("Не удалось сохранить",21f,weight=750)},text={Copy(storageError!!)},confirmButton={TextButton(onClick=model::clearError){Text("Понятно")}})
+    if(backupImportUri!=null)AlertDialog(onDismissRequest={if(!backupBusy)backupImportUri=null},
+        title={Copy("Восстановить записи?",22f,weight=750)},
+        text={Copy("Копии записей появятся в локальном пространстве. Текущие записи останутся. Черновики объединятся, а тот же файл повторно не добавится. Ключи ИИ и вход в аккаунт не восстанавливаются.",13f,line=21f)},
+        confirmButton={TextButton(enabled=!backupBusy,onClick={
+            val uri=backupImportUri
+            if(uri!=null&&!backupBusy){backupBusy=true;scope.launch {
+                try {
+                    model.flushDraft()
+                    val bytes=withContext(Dispatchers.IO) {context.contentResolver.openInputStream(uri)?.use {input->
+                        val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192)
+                        while(true){val count=input.read(buffer);if(count<0)break;require(out.size()+count<=BACKUP_MAX_BYTES);out.write(buffer,0,count)}
+                        out.toByteArray()
+                    }?:error("File unavailable")}
+                    val count=graph.data.importBackup(bytes)
+                    graph.settings.mode("local");model.retry();backupImportUri=null
+                    notify(if(count==0)"Этот файл уже восстановлен или не содержит записей" else "Восстановлено записей: $count")
+                } catch(e: Exception) {if(e is kotlinx.coroutines.CancellationException)throw e;model.error.value="Не удалось восстановить файл. Нужна резервная копия «Сброса» размером до 16 МБ. Текущие записи сохранены."}
+                finally {backupBusy=false}
+            }}
+        }){Text(if(backupBusy)"Восстанавливаем…" else "Восстановить")}},
+        dismissButton={TextButton(enabled=!backupBusy,onClick={backupImportUri=null}){Text("Отмена")}})
     if(loaded&&auth.user!=null&&pendingImport==auth.user!!.id)AlertDialog(onDismissRequest={if(!importing)scope.launch {graph.keepLocal()}},
         title={Copy("Добавить записи в облако?",23f,weight=750)},
         text={Column {Copy("У тебя есть записи на этом устройстве. Хочешь добавить их в облако? Дела, мысли и дневник будут загружены в твой аккаунт. Оригиналы останутся на устройстве.",13f,line=21f);if(accountError!=null){Spacer(Modifier.height(10.dp));Copy(accountError!!,12f,c.muted2)}}},

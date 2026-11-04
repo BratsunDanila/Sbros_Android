@@ -18,6 +18,8 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
     val loadError=MutableStateFlow(false)
     private val reload=MutableStateFlow(0)
     private val operations=Channel<suspend ()->Unit>(Channel.UNLIMITED)
+    private data class DraftWrite(val scope: String,var text: String)
+    private val pendingDraftWrites=mutableMapOf<String,DraftWrite>()
     private var undoReceipt: MutationReceipt?=null
     private var draftRevision=0L
     val draft=MutableStateFlow("")
@@ -33,23 +35,32 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
         saved.get<String>("demo")?.let {legacy->viewModelScope.launch {runCatching {write {repository.importLegacy(legacy,saved.get<String>("draft")?:"")}}.onFailure {error.value="Не удалось перенести данные прежней версии. Исходное состояние сохранено."}}}
     }
     private suspend fun <T> write(block: suspend ()->T): T {
+        // A save/confirmation is an ordering barrier: later typing gets a new write.
+        pendingDraftWrites.clear()
         val result=CompletableDeferred<T>()
         operations.send {try {result.complete(block())}catch(e: Exception){result.completeExceptionally(e)}}
         return result.await()
     }
-    private suspend fun change(expected: Triple<String,Int,String>?=null,transform: (DemoState)->DemoState): Boolean {
+    private suspend fun change(expected: Triple<String,Int,String>?=null,transform: (WorkspaceState)->WorkspaceState): Boolean {
         val scope=workspace.value.scope
         return try {write {val result=if(expected==null)repository.change(scope,transform)else repository.checkedChange(scope,expected.first,expected.second,expected.third,transform);if(result.receipt.entries.isNotEmpty())undoReceipt=result.receipt};true}
         catch(e: Exception){if(e is CancellationException)throw e;error.value=when(e){is StaleEditor->"Запись изменилась, пока форма была открыта. Твоя правка остаётся в форме. Скопируй её перед закрытием и открой актуальную запись: прежняя версия не перезаписана.";is RecordTooLarge->"Запись слишком большая (до 240 КБ вместе с оформлением). Текст остаётся в форме: раздели его на несколько записей.";else->"Не удалось сохранить запись. Данные не удалены. Повтори попытку."};false}
     }
     fun retry(){loadError.value=false;reload.value++}
     fun clearError(){error.value=null}
+    suspend fun flushDraft(){val scope=workspace.value.scope;val text=draft.value;write {repository.draft(scope,text)}}
     fun draft(text: String){val value=text;draft.value=value;draftRevision++;val scope=workspace.value.scope
-        operations.trySend {try{repository.draft(scope,value)}catch(e: Exception){error.value="Черновик пока не сохранён. Не закрывай приложение; повтори ввод после освобождения памяти."}}
+        val pending=pendingDraftWrites[scope]
+        if(pending!=null){pending.text=value;return}
+        val update=DraftWrite(scope,value);pendingDraftWrites[scope]=update
+        operations.trySend {
+            if(pendingDraftWrites[scope]===update)pendingDraftWrites.remove(scope)
+            try{repository.draft(scope,update.text)}catch(e: Exception){error.value="Черновик пока не сохранён. Не закрывай приложение; повтори ввод после освобождения памяти."}
+        }
     }
     fun appearance(value: Appearance){viewModelScope.launch {try{settings.update(value)}catch(e: Exception){error.value="Не удалось сохранить настройки"}}}
-    fun mutate(transform: (DemoState)->DemoState){viewModelScope.launch {change(transform=transform)}}
-    suspend fun mutateAwait(expected: Triple<String,Int,String>?=null,transform: (DemoState)->DemoState)=change(expected,transform)
+    fun mutate(transform: (WorkspaceState)->WorkspaceState){viewModelScope.launch {change(transform=transform)}}
+    suspend fun mutateAwait(expected: Triple<String,Int,String>?=null,transform: (WorkspaceState)->WorkspaceState)=change(expected,transform)
     fun selectTask(id: Int){mutate {it.focusTask(id)}}
     fun skipTask(){mutate {it.nextTask()}}
     suspend fun complete(id: Int): Long? {var token: Long?=null
@@ -180,6 +191,14 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
         if(current.original.isNotBlank()&&current.phase!="saved")resumeCapture(StoredCapture(current.captureId,current.original,""))
     }
     suspend fun reset(){write {repository.resetDemo()}}
+    suspend fun saveFirstStep(taskId: Int,revision: String,title: String): Boolean {
+        if(title.isBlank()||title.length>500)return false
+        return change(Triple("action",taskId,revision)) {s->
+            val task=s.tasks.first {it.id==taskId&&it.status!="done"}
+            val step=ActionTask(s.nextLocalId("action"),title.trim(),task.area,0,"Первый шаг: ${task.title}",projectId=task.projectId,captureId=task.captureId)
+            s.copy(tasks=s.tasks+step).focusTask(step.id)
+        }
+    }
     suspend fun saveTask(id: Int?,title: String,status: String,area: String,projectId: Int?=null,revision: String?=null,dueDate: String?=workspace.value.data.tasks.firstOrNull {it.id==id}?.dueDate): Boolean {
         if(title.isBlank()||title.length>500||!validTaskDeadline(dueDate))return false
         return change(if(id!=null&&revision!=null)Triple("action",id,revision)else null) {s->require(id==null||s.tasks.any{it.id==id});require(projectId==null||s.projects.any{it.id==projectId});require(status in listOf("next","waiting","someday","done"));s.saveTask(id,title,status,area,projectId,dueDate)}

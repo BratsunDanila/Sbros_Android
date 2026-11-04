@@ -23,7 +23,8 @@ import ru.sbros.app.data.auth.AuthState
 
 @Composable fun AppSettingsScreen(appearance: Appearance,change: (Appearance)->Unit,auth: AuthState,workspace: String,syncMessage: String,conflicts: Int,ai: AiState,hasLegacy: Boolean,
     login: ()->Unit,register: ()->Unit,logout: ()->Unit,sync: ()->Unit,importLocal: ()->Unit,switchWorkspace: ()->Unit,openConflicts: ()->Unit,openVersions: ()->Unit,openAi: ()->Unit,
-    examples: ()->Unit,leaveExamples: ()->Unit,legacy: ()->Unit,resetDemo: ()->Unit,close: ()->Unit) {
+    examples: ()->Unit,leaveExamples: ()->Unit,legacy: ()->Unit,resetDemo: ()->Unit,close: ()->Unit,
+    exportBackup: ()->Unit={},importBackup: ()->Unit={}) {
     val c=LocalSbrosColors.current
     var page by rememberSaveable {mutableStateOf("")}
     var confirmReset by remember {mutableStateOf(false)}
@@ -71,6 +72,14 @@ import ru.sbros.app.data.auth.AuthState
                         }
                     }
                     "extra" -> {
+                        Paper(Modifier.fillMaxWidth(),23.dp) {
+                            Column(Modifier.padding(horizontal=15.dp)) {
+                                SettingsRow("Сохранить резервную копию",R.drawable.ic_layers,exportBackup)
+                                SettingsDivider()
+                                SettingsRow("Восстановить из файла",R.drawable.ic_folder,importBackup)
+                            }
+                        }
+                        Spacer(Modifier.height(14.dp))
                         Paper(Modifier.fillMaxWidth(),23.dp) {
                             Column(Modifier.padding(horizontal=15.dp)) {
                                 if(workspace in listOf("demo","legacy"))SettingsRow("Вернуться к своим записям",R.drawable.ic_left,leaveExamples)

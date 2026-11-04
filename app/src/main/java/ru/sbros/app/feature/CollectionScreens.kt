@@ -28,7 +28,7 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
     }
 }
 
-@Composable fun CollectionScreen(key: String,state: DemoState,back: ()->Unit,add: ()->Unit,
+@Composable fun CollectionScreen(key: String,state: WorkspaceState,back: ()->Unit,add: ()->Unit,
     openProject: (Int)->Unit,editTask: (Int)->Unit,editMaterial: (Int)->Unit,complete: (Int)->Unit) {
     val c=LocalSbrosColors.current
     BoxWithConstraints(Modifier.fillMaxSize().testTag("collection-screen-$key")) {
@@ -81,7 +81,7 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
     }
 }
 
-@Composable fun ProjectScreen(project: DemoProject?,state: DemoState,back: ()->Unit,add: ()->Unit,edit: ()->Unit,editTask: (Int)->Unit,complete: (Int)->Unit) {
+@Composable fun ProjectScreen(project: Project?,state: WorkspaceState,back: ()->Unit,add: ()->Unit,edit: ()->Unit,editTask: (Int)->Unit,complete: (Int)->Unit) {
     val c=LocalSbrosColors.current
     BoxWithConstraints(Modifier.fillMaxSize().testTag("project-screen")) {
         LazyColumn(Modifier.fillMaxSize().testTag("project-actions-list"),contentPadding=PaddingValues(start=if(maxWidth<350.dp)15.dp else 20.dp,end=if(maxWidth<350.dp)15.dp else 20.dp,top=18.dp,bottom=24.dp)) {
@@ -118,7 +118,7 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
         }
     }
 }
-@Composable internal fun ManagementTaskRow(task: DemoTask,state: DemoState,complete: (Int)->Unit,showDeadline: Boolean=true,showProject: Boolean=true,embedded: Boolean=false,edit: ()->Unit) {
+@Composable internal fun ManagementTaskRow(task: ActionTask,state: WorkspaceState,complete: (Int)->Unit,showDeadline: Boolean=true,showProject: Boolean=true,embedded: Boolean=false,edit: ()->Unit) {
     val c=LocalSbrosColors.current
     TaskRowSurface(Modifier.fillMaxWidth().testTag("management-task-${task.id}"),20.dp,embedded) {
         Row(Modifier.fillMaxWidth().padding(start=5.dp,end=8.dp,top=12.dp,bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {

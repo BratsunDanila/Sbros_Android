@@ -15,23 +15,23 @@ internal fun canonicalJson(value: Any?): String=when(value){null,JSONObject.NULL
 
 /** JSON is a per-record payload, not a second database or an AI heuristic. */
 internal object RecordCodec {
-    fun decode(records: List<LocalRecord>,ui: String): DemoState {
+    fun decode(records: List<LocalRecord>,ui: String): WorkspaceState {
         val rows=records.filter {it.deletedAt==null}
         fun of(kind: String)=rows.filter {it.kind==kind}
-        val projects=of("project").map {r->val p=JSONObject(r.payload);DemoProject(r.localId,p.getString("title"),p.optString("area"),p.optString("outcome"))}
+        val projects=of("project").map {r->val p=JSONObject(r.payload);Project(r.localId,p.getString("title"),p.optString("area"),p.optString("outcome"))}
         val projectIds=of("project").associate {it.id to it.localId}
         val captures=of("capture").sortedByDescending {it.createdAt}.map {r->val p=JSONObject(r.payload);StoredCapture(r.id,p.getString("text"),r.createdAt,p.optString("status","inbox"),p.optional("confirmedAt"),p.optString("source","text"),r.captureId)}
-        val tasks=of("action").map {r->val p=JSONObject(r.payload);DemoTask(r.localId,p.getString("title"),p.optString("area"),p.optInt("energy"),p.optString("hint"),p.getString("status"),projectIds[r.projectId],r.captureId,p.optional("dueDate"))}
-        val thoughts=of("thought").sortedByDescending {it.createdAt}.map {r->val p=JSONObject(r.payload);val date=Instant.parse(r.createdAt).atZone(ZoneId.systemDefault()).toLocalDate();Thought(r.localId,p.getString("title"),p.getString("body"),p.optBoolean("idea"),ChronoUnit.DAYS.between(date,LocalDate.now()).toInt().coerceAtLeast(0),p.optString("time"),p.optBoolean("favorite"),p.optional("sourceText"),r.captureId)}
-        val events=of("event").map {r->val p=JSONObject(r.payload);DemoEvent(r.localId,p.getString("title"),p.getString("date"),p.optString("time"))}
-        val materials=of("reference").map {r->val p=JSONObject(r.payload);DemoMaterial(r.localId,p.getString("title"),p.optString("body"))}
+        val tasks=of("action").map {r->val p=JSONObject(r.payload);ActionTask(r.localId,p.getString("title"),p.optString("area"),p.optInt("energy"),p.optString("hint"),p.getString("status"),projectIds[r.projectId],r.captureId,p.optional("dueDate"))}
+        val thoughts=of("thought").sortedByDescending {it.createdAt}.map {r->val p=JSONObject(r.payload);val date=Instant.parse(r.createdAt).atZone(ZoneId.systemDefault()).toLocalDate();Thought(r.localId,p.getString("title"),p.getString("body"),p.optBoolean("idea"),ChronoUnit.DAYS.between(date,LocalDate.now()).toInt().coerceAtLeast(0),p.optString("time"),p.optBoolean("favorite"),p.optional("sourceText"),r.captureId,r.createdAt)}
+        val events=of("event").map {r->val p=JSONObject(r.payload);CalendarEvent(r.localId,p.getString("title"),p.getString("date"),p.optString("time"))}
+        val materials=of("reference").map {r->val p=JSONObject(r.payload);ReferenceMaterial(r.localId,p.getString("title"),p.optString("body"))}
         val meta=JSONObject(ui)
         val undo=meta.optJSONArray("undo")?.let {a->(0 until a.length()).map {i->a.getJSONObject(i).let {TaskCompletionUndo(it.getLong("token"),it.getInt("task"),it.optInt("focus").takeIf{n->n>0},it.optString("status","next"))}}}?:emptyList()
         val results=rows.filter{it.captureId!=null&&it.kind in setOf("action","project","thought","event","reference")}.groupBy{it.captureId!!}.mapValues{(_,v)->v.map{JSONObject(it.payload).getString("title")}}
-        return DemoState(tasks,thoughts,captures.filter {it.status=="inbox"}.map {it.text},events,meta.optInt("focus").takeIf {it>0},undo,projects,materials,captures,records.groupBy{it.kind}.mapValues {(_,v)->v.maxOf {it.localId}},records.associate{"${it.kind}:${it.localId}" to it.changeId},results).reconcileTaskFocus()
+        return WorkspaceState(tasks,thoughts,captures.filter {it.status=="inbox"}.map {it.text},events,meta.optInt("focus").takeIf {it>0},undo,projects,materials,captures,records.groupBy{it.kind}.mapValues {(_,v)->v.maxOf {it.localId}},records.associate{"${it.kind}:${it.localId}" to it.changeId},results).reconcileTaskFocus()
     }
-    fun ui(state: DemoState)=JSONObject().put("focus",state.focusedTaskId).put("undo",JSONArray(state.taskUndo.map {JSONObject().put("token",it.token).put("task",it.taskId).put("focus",it.focusBefore).put("status",it.statusBefore)})).toString()
-    fun encode(scope: String,state: DemoState,old: List<LocalRecord>): List<LocalRecord> {
+    fun ui(state: WorkspaceState)=JSONObject().put("focus",state.focusedTaskId).put("undo",JSONArray(state.taskUndo.map {JSONObject().put("token",it.token).put("task",it.taskId).put("focus",it.focusBefore).put("status",it.statusBefore)})).toString()
+    fun encode(scope: String,state: WorkspaceState,old: List<LocalRecord>): List<LocalRecord> {
         val prior=old.associateBy {it.kind to it.localId};val output=mutableListOf<LocalRecord>();val timestamp=now()
         fun add(kind: String,id: Int,payload: JSONObject,project: String?=null,capture: String?=null,stableId: String?=null,created: String?=null) {
             val before=prior[kind to id]

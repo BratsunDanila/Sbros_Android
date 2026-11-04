@@ -63,7 +63,7 @@ import kotlinx.coroutines.launch
     Spacer(Modifier.height(10.dp));ActionButton(stringResource(R.string.cancel),cancel,Modifier.fillMaxWidth().testTag("editor-cancel"),primary=false,minHeight=44.dp)
 }
 
-@Composable fun TaskEditor(task: DemoTask,cancel: ()->Unit,projects: List<DemoProject> = emptyList(),save: suspend (String,String,String,String?,Int?)->Boolean) {
+@Composable fun TaskEditor(task: ActionTask,cancel: ()->Unit,projects: List<Project> = emptyList(),save: suspend (String,String,String,String?,Int?)->Boolean) {
     val scope=rememberCoroutineScope()
     var title by rememberSaveable(task.id){mutableStateOf(task.title)}
     var status by rememberSaveable(task.id){mutableStateOf(task.status)}
@@ -71,7 +71,7 @@ import kotlinx.coroutines.launch
     var projectId by rememberSaveable(task.id){mutableStateOf(task.projectId)}
     var dueDate by rememberSaveable(task.id){mutableStateOf(task.dueDate.orEmpty())}
     var dateError by rememberSaveable(task.id){mutableStateOf(false)}
-    var submitted by rememberSaveable(task.id){mutableStateOf(false)}
+    var submitted by remember(task.id){mutableStateOf(false)}
     var error by rememberSaveable(task.id){mutableStateOf(false)}
     EditorHeading(stringResource(R.string.task_editor),stringResource(R.string.task_editor_sub))
     ReferenceField(title,{title=it},stringResource(R.string.what_to_do),"task-title-input")
@@ -96,7 +96,7 @@ import kotlinx.coroutines.launch
     var kind by rememberSaveable {mutableStateOf(initialKind)}
     var dueDate by rememberSaveable {mutableStateOf("")}
     var dateError by rememberSaveable {mutableStateOf(false)}
-    var submitted by rememberSaveable {mutableStateOf(false)}
+    var submitted by remember {mutableStateOf(false)}
     var error by rememberSaveable {mutableStateOf(false)}
     EditorHeading(stringResource(R.string.add_task),stringResource(R.string.one_thought_one_action))
     ReferenceField(title,{title=it},"","new-title-input",true,stringResource(R.string.what_needs_doing))
@@ -114,12 +114,12 @@ import kotlinx.coroutines.launch
     },cancel,R.drawable.ic_check)
 }
 
-@Composable fun ProjectEditor(project: DemoProject,cancel: ()->Unit,save: suspend (String,String,String)->Boolean,delete: suspend ()->Boolean) {
+@Composable fun ProjectEditor(project: Project,cancel: ()->Unit,save: suspend (String,String,String)->Boolean,delete: suspend ()->Boolean) {
     val scope=rememberCoroutineScope()
     var title by rememberSaveable(project.id){mutableStateOf(project.title)}
     var area by rememberSaveable(project.id){mutableStateOf(project.area)}
     var outcome by rememberSaveable(project.id){mutableStateOf(project.outcome)}
-    var submitted by rememberSaveable(project.id){mutableStateOf(false)}
+    var submitted by remember(project.id){mutableStateOf(false)}
     var error by rememberSaveable(project.id){mutableStateOf(false)}
     var deleting by rememberSaveable(project.id){mutableStateOf(false)}
     EditorHeading(stringResource(R.string.project))
@@ -133,11 +133,11 @@ import kotlinx.coroutines.launch
     QuietAction(stringResource(R.string.delete_project),R.drawable.ic_trash,MaterialTheme.colorScheme.error){deleting=true}
     if(deleting)AlertDialog(onDismissRequest={deleting=false},title={Copy(stringResource(R.string.delete_project_question),20f,weight=700)},text={Copy(stringResource(R.string.project_tasks_kept))},confirmButton={TextButton(onClick={if(!submitted){submitted=true;deleting=false;scope.launch {if(!delete()){submitted=false;error=true}}}}){Text(stringResource(R.string.delete))}},dismissButton={TextButton(onClick={deleting=false}){Text(stringResource(R.string.cancel))}})
 }
-@Composable fun MaterialEditor(material: DemoMaterial,cancel: ()->Unit,save: suspend (String,String)->Boolean,delete: suspend ()->Boolean) {
+@Composable fun MaterialEditor(material: ReferenceMaterial,cancel: ()->Unit,save: suspend (String,String)->Boolean,delete: suspend ()->Boolean) {
     val scope=rememberCoroutineScope()
     var title by rememberSaveable(material.id){mutableStateOf(material.title)}
     var body by rememberSaveable(material.id){mutableStateOf(material.body)}
-    var submitted by rememberSaveable(material.id){mutableStateOf(false)}
+    var submitted by remember(material.id){mutableStateOf(false)}
     var error by rememberSaveable(material.id){mutableStateOf(false)}
     EditorHeading(stringResource(R.string.material))
     ReferenceField(title,{title=it},stringResource(R.string.title_label),"material-title-input")

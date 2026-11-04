@@ -8,17 +8,17 @@ import java.util.concurrent.Callable
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-data class WorkspaceSnapshot(val scope: String,val data: DemoState=emptyState(),val draft: String="",val loaded: Boolean=false)
+data class WorkspaceSnapshot(val scope: String,val data: WorkspaceState=emptyState(),val draft: String="",val loaded: Boolean=false)
 data class UndoEntry(val before: LocalRecord?,val afterId: String,val afterChangeId: String)
 data class MutationReceipt(val scope: String,val entries: List<UndoEntry>)
-data class ChangeResult(val state: DemoState,val receipt: MutationReceipt)
+data class ChangeResult(val state: WorkspaceState,val receipt: MutationReceipt)
 class StaleEditor: Exception("Record changed while the editor was open")
 class RecordTooLarge: Exception("Record exceeds the shared local/cloud size limit")
 
 interface DataRepository {
     fun observe(scope: String): Flow<WorkspaceSnapshot>
     suspend fun read(scope: String): WorkspaceSnapshot
-    suspend fun change(scope: String,transform: (DemoState)->DemoState): ChangeResult
+    suspend fun change(scope: String,transform: (WorkspaceState)->WorkspaceState): ChangeResult
     suspend fun draft(scope: String,text: String)
     suspend fun saveCapture(scope: String,text: String): ChangeResult
     suspend fun moveToThought(scope: String,id: String): ChangeResult
@@ -37,13 +37,18 @@ class RoomDataRepository(val db: SbrosDatabase): DataRepository {
             }
         }
     }
-    private fun withCaptures(state: DemoState)=if(state.captures.isEmpty()&&state.inbox.isNotEmpty())state.copy(captures=state.inbox.map {StoredCapture(uuid(),it,now())})else state
+    private fun withCaptures(state: WorkspaceState)=if(state.captures.isEmpty()&&state.inbox.isNotEmpty())state.copy(captures=state.inbox.map {StoredCapture(uuid(),it,now())})else state
     override suspend fun read(scope: String)=transaction {val w=ensure(scope);WorkspaceSnapshot(scope,RecordCodec.decode(dao.records(scope),w.uiState),w.draft,true)}
     override fun observe(scope: String): Flow<WorkspaceSnapshot> = flow {
-        read(scope)
-        emitAll(combine(dao.observe(scope),dao.observeWorkspace(scope)){_,_->Unit}.map {read(scope)})
-    }
-    private fun write(scope: String,workspace: WorkspaceRow,before: List<LocalRecord>,state: DemoState): ChangeResult {
+        emit(read(scope))
+        val records=dao.observe(scope).distinctUntilChanged {old,next->
+            old.size==next.size&&old.zip(next).all {(a,b)->a.id==b.id&&a.changeId==b.changeId}
+        }
+        val ui=dao.observeWorkspace(scope).map {it?.uiState?:"{}"}.distinctUntilChanged()
+        // Draft-only writes no longer decode every record in the workspace.
+        emitAll(combine(records,ui) {rows,state->WorkspaceSnapshot(scope,RecordCodec.decode(rows,state),loaded=true)})
+    }.flowOn(Dispatchers.IO)
+    private fun write(scope: String,workspace: WorkspaceRow,before: List<LocalRecord>,state: WorkspaceState): ChangeResult {
         val rows=RecordCodec.encode(scope,state,before)
         val old=before.associateBy {it.id}
         val changed=rows.filter {it.changeId!=old[it.id]?.changeId}
@@ -51,10 +56,10 @@ class RoomDataRepository(val db: SbrosDatabase): DataRepository {
         workspace.uiState=RecordCodec.ui(state);dao.putWorkspace(workspace)
         return ChangeResult(RecordCodec.decode(rows,workspace.uiState),MutationReceipt(scope,changed.map {UndoEntry(old[it.id]?.duplicate(),it.id,it.changeId)}))
     }
-    override suspend fun change(scope: String,transform: (DemoState)->DemoState)=transaction {
+    override suspend fun change(scope: String,transform: (WorkspaceState)->WorkspaceState)=transaction {
         val w=ensure(scope);val old=dao.records(scope);write(scope,w,old,transform(RecordCodec.decode(old,w.uiState)))
     }
-    suspend fun checkedChange(scope: String,kind: String,id: Int,revision: String,transform: (DemoState)->DemoState)=transaction {
+    suspend fun checkedChange(scope: String,kind: String,id: Int,revision: String,transform: (WorkspaceState)->WorkspaceState)=transaction {
         val w=ensure(scope);val old=dao.records(scope)
         val record=old.find{it.kind==kind&&it.localId==id}
         if(record==null||record.deletedAt!=null||record.changeId!=revision)throw StaleEditor()

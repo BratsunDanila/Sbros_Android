@@ -18,7 +18,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val ru=Locale.forLanguageTag("ru")
-@Composable fun CalendarScreen(state: DemoState, settings: ()->Unit, event: (DemoEvent?,String)->Unit,editTask: (Int)->Unit={},completeTask: (Int)->Unit={}) {
+@Composable fun CalendarScreen(state: WorkspaceState, settings: ()->Unit, event: (CalendarEvent?,String)->Unit,editTask: (Int)->Unit={},completeTask: (Int)->Unit={}) {
     val c=LocalSbrosColors.current
     var monthString by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }; val month=YearMonth.parse(monthString)
     var selected by rememberSaveable {mutableStateOf(LocalDate.now().toString())}

@@ -16,11 +16,11 @@ import ru.sbros.app.R
 import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
 
-internal data class TaskDisplayGroup(val project: DemoProject?, val tasks: List<DemoTask>) {
+internal data class TaskDisplayGroup(val project: Project?, val tasks: List<ActionTask>) {
     val key: String get() = project?.let { "project-${it.id}" } ?: "task-${tasks.first().id}"
 }
 
-internal fun projectTaskGroups(tasks: List<DemoTask>, projects: List<DemoProject>): List<TaskDisplayGroup> {
+internal fun projectTaskGroups(tasks: List<ActionTask>, projects: List<Project>): List<TaskDisplayGroup> {
     val byProject = tasks.filter { it.projectId != null }.groupBy { it.projectId }
     val projectsById = projects.associateBy { it.id }
     val seen = mutableSetOf<Int>()
@@ -35,7 +35,7 @@ internal fun projectTaskGroups(tasks: List<DemoTask>, projects: List<DemoProject
     }
 }
 
-@Composable internal fun ProjectTaskGroup(group: TaskDisplayGroup, content: @Composable (DemoTask) -> Unit) {
+@Composable internal fun ProjectTaskGroup(group: TaskDisplayGroup, content: @Composable (ActionTask) -> Unit) {
     val project = requireNotNull(group.project)
     val c = LocalSbrosColors.current
     var expanded by rememberSaveable(project.id) { mutableStateOf(false) }

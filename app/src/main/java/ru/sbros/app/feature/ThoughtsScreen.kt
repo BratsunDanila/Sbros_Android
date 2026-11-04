@@ -2,6 +2,7 @@ package ru.sbros.app.feature
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.*
@@ -17,14 +18,19 @@ import androidx.compose.ui.unit.*
 import ru.sbros.app.R
 import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
+import java.time.*
+import java.time.format.DateTimeFormatter
 
-@Composable fun ThoughtsScreen(state: DemoState, open: (Int)->Unit) {
+@Composable fun ThoughtsScreen(state: WorkspaceState, open: (Int)->Unit) {
     val c=LocalSbrosColors.current
     var filter by rememberSaveable { mutableIntStateOf(0) }; var search by rememberSaveable { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }
-    val list=state.thoughts.filter { (filter==0||filter==1&&it.idea||filter==2&&!it.idea||filter==3&&it.favorite)&&(it.title+" "+it.body).contains(query,true) }
+    val list=remember(state.thoughts,filter,query) {state.thoughts.filter { (filter==0||filter==1&&it.idea||filter==2&&!it.idea||filter==3&&it.favorite)&&(it.title+" "+it.body).contains(query,true) }}
+    val today=LocalDate.now()
+    val groups=list.groupBy {thought->thought.createdAt?.let {Instant.parse(it).atZone(ZoneId.systemDefault()).toLocalDate()}?:today.minusDays(thought.daysAgo.toLong())}.toSortedMap(reverseOrder())
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val padding=if(maxWidth<350.dp)15.dp else 20.dp
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=padding).padding(top=ContentTopPadding,bottom=18.dp)) {
+        LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(start=padding,end=padding,top=ContentTopPadding,bottom=18.dp)) {
+            item(key="header") {Column {
             Heading(stringResource(R.string.thoughts),stringResource(R.string.thoughts_sub)) {
                 IconAction(if(search)R.drawable.ic_x else R.drawable.ic_search,stringResource(R.string.search)) {search=!search;if(!search)query=""}
             }
@@ -38,10 +44,15 @@ import ru.sbros.app.data.*
                 listOf(R.string.all,R.string.ideas,R.string.diary,R.string.favorites).forEachIndexed { n,id -> Pill(stringResource(id),filter==n,{filter=n},solid=true) }
             }
             Spacer(Modifier.height(18.dp))
-            if(list.isEmpty()) Copy(stringResource(R.string.empty_search),color=c.muted2,modifier=Modifier.padding(vertical=30.dp))
-            var prior=-1
-            list.forEach { thought ->
-                if(prior!=thought.daysAgo) { if(prior!=-1)Spacer(Modifier.height(14.dp)); Eyebrow(stringResource(if(thought.daysAgo==0)R.string.today else if(thought.daysAgo==1)R.string.yesterday else R.string.this_week),c.muted,10f); Spacer(Modifier.height(11.dp)); prior=thought.daysAgo }
+            }}
+            if(list.isEmpty())item(key="empty") {Copy(stringResource(R.string.empty_search),color=c.muted2,modifier=Modifier.padding(vertical=30.dp))}
+            groups.entries.forEachIndexed {index,(date,thoughts)->
+                item(key="date:$date") {Column {
+                    if(index>0)Spacer(Modifier.height(14.dp))
+                    Eyebrow(when(date){today->stringResource(R.string.today);today.minusDays(1)->stringResource(R.string.yesterday);else->date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))},c.muted,10f)
+                    Spacer(Modifier.height(11.dp))
+                }}
+                items(thoughts,key={"thought:${it.id}"}) {thought->Column {
                 Paper(Modifier.fillMaxWidth().clickable {open(thought.id)},22.dp) {
                     Column(Modifier.padding(start=16.dp,end=16.dp,top=14.dp,bottom=12.dp)) {
                         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { Glyph(if(thought.idea)R.drawable.ic_bulb else R.drawable.ic_feather,14.dp); Spacer(Modifier.width(6.dp)); Copy(if(thought.idea)"Идея" else "Запись",10f,c.primary,700,Modifier.weight(1f)); Copy(thought.time,10f,c.muted) }
@@ -52,6 +63,7 @@ import ru.sbros.app.data.*
                     }
                 }
                 Spacer(Modifier.height(9.dp))
+                }}
             }
         }
     }

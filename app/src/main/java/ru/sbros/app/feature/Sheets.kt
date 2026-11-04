@@ -28,17 +28,17 @@ import kotlinx.coroutines.launch
 @Composable private fun Field(value: String,change: (String)->Unit,label: String,minLines: Int=1) {
     ReferenceField(value,change,label,multiline=minLines>1,minimumHeight=if(minLines>1)170.dp else 42.dp)
 }
-@Composable fun EventSheet(event: DemoEvent?,date: String,save: suspend (DemoEvent)->Boolean,delete: suspend ()->Boolean) {
+@Composable fun EventSheet(event: CalendarEvent?,date: String,save: suspend (CalendarEvent)->Boolean,delete: suspend ()->Boolean) {
     val scope=rememberCoroutineScope()
     var title by rememberSaveable(event?.id,date) {mutableStateOf(event?.title?:"")};var day by rememberSaveable(event?.id,date) {mutableStateOf(event?.date?:date)};var time by rememberSaveable(event?.id,date) {mutableStateOf(event?.time?:"")}
     var error by rememberSaveable {mutableStateOf("")}
-    var submitted by rememberSaveable(event?.id,date){mutableStateOf(false)}
+    var submitted by remember(event?.id,date){mutableStateOf(false)}
     SheetTitle(if(event==null)"Запланировать" else "Событие","Только для дел, у которых действительно есть дата.")
     Field(title,{title=it},"Что и когда");DateField(day,{day=it});Field(time,{time=it},"Время · ЧЧ:ММ, пусто — весь день")
     if(error.isNotEmpty()) Copy(error,color=MaterialTheme.colorScheme.error)
     ActionButton(stringResource(R.string.save),{
         when {title.isBlank()||title.length>500->error="Укажи название до 500 символов";runCatching {LocalDate.parse(day)}.isFailure->error="Проверь дату: ДД.ММ.ГГГГ";time.isNotBlank()&&runCatching {LocalTime.parse(time)}.isFailure->error="Проверь время: ЧЧ:ММ"
-            else->if(!submitted){submitted=true;scope.launch {if(!save(DemoEvent(event?.id?:0,title.trim(),day,time))){submitted=false;error="Не удалось сохранить. Повтори попытку."}}}}
+            else->if(!submitted){submitted=true;scope.launch {if(!save(CalendarEvent(event?.id?:0,title.trim(),day,time))){submitted=false;error="Не удалось сохранить. Повтори попытку."}}}}
     },Modifier.fillMaxWidth(),enabled=!submitted)
     if(event!=null) {Spacer(Modifier.height(9.dp));ActionButton("Удалить событие",{if(!submitted){submitted=true;scope.launch {if(!delete()){submitted=false;error="Не удалось удалить. Повтори попытку."}}}},Modifier.fillMaxWidth(),false,enabled=!submitted)}
 }

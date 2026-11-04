@@ -5,31 +5,31 @@ fun validTaskDeadline(value: String?): Boolean=value.isNullOrBlank()||
 
 data class TaskCompletionUndo(val token: Long, val taskId: Int, val focusBefore: Int?, val statusBefore: String = "next")
 
-val DemoState.availableActions: List<DemoTask> get() = tasks.filter { it.status == "next" }
-val DemoState.focusedAction: DemoTask? get() = availableActions.let { list ->
+val WorkspaceState.availableActions: List<ActionTask> get() = tasks.filter { it.status == "next" }
+val WorkspaceState.focusedAction: ActionTask? get() = availableActions.let { list ->
     list.firstOrNull { it.id == focusedTaskId } ?: list.firstOrNull()
 }
-val DemoState.remainingActions: List<DemoTask> get() {
+val WorkspaceState.remainingActions: List<ActionTask> get() {
     val focused=focusedAction?.id
     return availableActions.filter {it.id!=focused}
 }
 
-fun DemoState.reconcileTaskFocus(): DemoState = copy(
+fun WorkspaceState.reconcileTaskFocus(): WorkspaceState = copy(
     focusedTaskId = focusedAction?.id,
     taskUndo = taskUndo.filter { undo -> tasks.any { it.id == undo.taskId && it.status == "done" } },
 )
 
-fun DemoState.focusTask(id: Int): DemoState =
+fun WorkspaceState.focusTask(id: Int): WorkspaceState =
     if (availableActions.any { it.id == id }) copy(focusedTaskId = id) else this
 
-fun DemoState.nextTask(): DemoState {
+fun WorkspaceState.nextTask(): WorkspaceState {
     val list = availableActions
     if (list.isEmpty()) return reconcileTaskFocus()
     val index = list.indexOfFirst { it.id == focusedAction?.id }
     return copy(focusedTaskId = list[(index + 1) % list.size].id)
 }
 
-fun DemoState.completeTask(id: Int, token: Long): DemoState {
+fun WorkspaceState.completeTask(id: Int, token: Long): WorkspaceState {
     val target=tasks.firstOrNull {it.id==id&&it.status in listOf("next","waiting","someday")}?:return this
     val before = focusedAction?.id
     val list = availableActions
@@ -44,7 +44,7 @@ fun DemoState.completeTask(id: Int, token: Long): DemoState {
     return after.copy(focusedTaskId = focus).reconcileTaskFocus()
 }
 
-fun DemoState.undoTaskCompletion(token: Long): DemoState {
+fun WorkspaceState.undoTaskCompletion(token: Long): WorkspaceState {
     val undo = taskUndo.firstOrNull { it.token == token } ?: return this
     if (tasks.none { it.id == undo.taskId && it.status == "done" }) return this
     // Restore only this status. Never roll back other completions, edits, thoughts or captures.
