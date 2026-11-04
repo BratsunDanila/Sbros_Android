@@ -20,14 +20,15 @@ android {
         applicationId = "ru.sbros.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.4.1-relational"
+        versionCode = 8
+        versionName = "0.4.1"
         buildConfigField("String","SUPABASE_URL",quoted(configValue("SUPABASE_URL")))
         buildConfigField("String","SUPABASE_PUBLISHABLE_KEY",quoted(supabasePublicKey))
         javaCompileOptions.annotationProcessorOptions.arguments["room.schemaLocation"] = "$projectDir/schemas"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true;buildConfig=true }
+    buildTypes { getByName("release") { isDebuggable=false } }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

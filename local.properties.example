@@ -1,0 +1,7 @@
+# Android Studio sets sdk.dir for your local Android SDK automatically.
+# Optional public configuration for account and cloud synchronization:
+SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
+
+# Personal Token Harbor keys are entered only in the app's AI settings.
+# Never put a Supabase service_role key or a personal AI key here.

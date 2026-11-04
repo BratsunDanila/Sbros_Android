@@ -1,7 +1,0 @@
-# Copy to local.properties and use the Android SDK location on your machine.
-sdk.dir=D\:/andriodsdk
-# Optional cloud account. Both values are public client configuration.
-SUPABASE_URL=https://lgnqqiiinrkpmjkpwmoh.supabase.co/rest/v1/
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_k_ueDRbD1vEJUq71vSlLrA_URDsD_w0
-# Never put service_role, sb_secret_* or a personal Token Harbor key here.
-# Enter a personal Token Harbor key only in the app's AI settings.

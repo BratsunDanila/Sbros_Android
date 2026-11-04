@@ -20,3 +20,23 @@ captures/local/
 /screenshots/
 /report/
 /sketches/
+
+# Local design, documentation and working materials
+/AGENTS.md
+/README_START.md
+/START_PROMPT_FOR_AGENT.txt
+/EXAMPLE PROPERTIES.example
+/docs/
+/reference/
+/contracts/
+/scripts/
+/tools/
+/figma/
+/presentation/
+/promo/
+/Untitled.zip
+/supabase/functions/
+/supabase/tests/
+
+# Private release signing material
+/.signing/
