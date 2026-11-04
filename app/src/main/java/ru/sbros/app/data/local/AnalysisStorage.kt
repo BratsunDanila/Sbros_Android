@@ -48,7 +48,7 @@ suspend fun RoomDataRepository.confirmAnalysis(scope: String,captureId: String,r
     val output=mutableListOf<LocalRecord>()
     val projects=accepted.filter {it.kind=="projects"}.associate {it.id to uuid()}
     fun add(recordKind: String,p: CaptureProposal,payload: JSONObject,stableId: String=uuid(),parent: String?=null) {
-        payload.put("analysisModel",review.model).put("sourceExcerpt",p.excerpt)
+        payload.put("analysisModel",review.model).put("sourceExcerpt",p.excerpt).put("analysisCommit",commitId)
         val body=payload.toString()
         if(body.toByteArray(Charsets.UTF_8).size>240_000)throw RecordTooLarge()
         val local=(high[recordKind]?:0)+1;high[recordKind]=local

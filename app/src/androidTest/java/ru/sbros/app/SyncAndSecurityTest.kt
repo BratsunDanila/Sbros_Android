@@ -42,7 +42,24 @@ private class CloudFixture: HttpTransport {
         if(url.contains("grant_type=refresh_token")){refreshes++;expiresIn=3600;return HttpResult(200,session())}
         if(url.contains("/auth/v1/token")||url.endsWith("/signup"))return HttpResult(200,session())
         if(url.contains("/logout"))return HttpResult(204,"")
-        if(url.endsWith("sync_push")) {
+        if(url.endsWith("sync_confirm_capture_v1")) {
+            val input=JSONObject(body!!);val source=input.getJSONObject("p_capture")
+            val prior=records[source.getString("id")]
+            if(prior!=null&&(
+                prior.getJSONObject("payload").let {p->p.optString("status")=="committed"&&p.optString("analysisCommit").let {it.isNotEmpty()&&it!=source.getJSONObject("payload").optString("analysisCommit")}}||
+                prior.getString("change_id")!=source.getString("change_id")&&prior.getLong("version")!=source.getLong("version")))
+                return HttpResult(200,JSONObject().put("status","conflict").put("record",prior).toString())
+            val changes=JSONArray().put(source);val results=input.getJSONArray("p_results")
+            for(i in 0 until results.length())changes.put(results.getJSONObject(i))
+            val before=records.toMap()
+            val pushed=request(url.removeSuffix("sync_confirm_capture_v1")+"sync_push_v3",method,headers,JSONObject().put("p_changes",changes).toString())
+            val acks=JSONArray(pushed.body)
+            if((0 until acks.length()).any {acks.getJSONObject(it).getString("status")!="ok"}) {
+                records.clear();records.putAll(before);return HttpResult(409,"{}")
+            }
+            return HttpResult(200,JSONObject().put("status","ok").put("records",acks).toString())
+        }
+        if(url.endsWith("sync_push")||url.endsWith("sync_push_v3")) {
             val changes=JSONObject(body!!).getJSONArray("p_changes");val out=JSONArray()
             for(i in 0 until changes.length()) {
                 val change=changes.getJSONObject(i);val id=change.getString("id");val prior=records[id]
@@ -54,7 +71,7 @@ private class CloudFixture: HttpTransport {
             if(loseAck){loseAck=false;throw IOException("connection lost after commit")}
             return HttpResult(200,out.toString())
         }
-        if(url.endsWith("sync_pull")) {
+        if(url.endsWith("sync_pull")||url.endsWith("sync_pull_v3")) {
             val p=JSONObject(body!!);val after=if(p.isNull("p_after"))null else p.getString("p_after")
             return HttpResult(200,JSONArray(records.values.filter{after==null||it.getString("id")>after}.sortedBy{it.getString("id")}.take(p.getInt("p_limit"))).toString())
         }
