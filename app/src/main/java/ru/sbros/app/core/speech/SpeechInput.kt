@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
@@ -53,11 +54,12 @@ class SpeechInput internal constructor(private val context: Context,private val 
     private var engineListening=false
     private var awaitingResult=false
     private var accumulated=""
+    private var consecutiveFailures=0
     private val handler=Handler(Looper.getMainLooper())
     private val restart=Runnable {if(listening&&!closed)startSegment()}
     private val timeout=Runnable {
-        if(listening&&awaitingResult)nextSegment(partial)
-        else {finish(partial);message="Не удалось дождаться службы распознавания. Попробуй ещё раз."}
+        if(listening)retrySegment("Служба распознавания не отвечает.")
+        else {finish(partial);message="Диктовка завершена. Сохранён последний распознанный текст."}
     }
 
     fun toggle() {
@@ -90,7 +92,7 @@ class SpeechInput internal constructor(private val context: Context,private val 
             message="На устройстве нет службы распознавания речи. Включи её в настройках Android или введи текст вручную."
             return
         }
-        accumulated=text();busy=true;listening=true
+        accumulated=text();consecutiveFailures=0;busy=true;listening=true
         startSegment()
     }
 
@@ -108,7 +110,9 @@ class SpeechInput internal constructor(private val context: Context,private val 
                         message="Слушаю. Паузы допустимы — закончи кнопкой."
                     }
                 }
-                override fun onBeginningOfSpeech() {}
+                override fun onBeginningOfSpeech() {
+                    if(id==session&&listening){handler.removeCallbacks(timeout);engineListening=true;awaitingResult=false}
+                }
                 override fun onRmsChanged(rmsdB: Float) {if(id==session&&engineListening&&listening&&rmsdB.isFinite())level=((rmsdB+2f)/12f).coerceIn(0f,1f)}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {
@@ -122,22 +126,32 @@ class SpeechInput internal constructor(private val context: Context,private val 
                 override fun onResults(results: Bundle?) {
                     if(id!=session)return
                     val result=results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty().ifBlank {partial}
+                    if(result.isNotBlank())consecutiveFailures=0
                     if(listening)nextSegment(result)
                     else {finish(result);message="Готово. Нажми на текст, если хочешь его поправить."}
                 }
                 override fun onError(error: Int) {
                     if(id!=session)return
+                    if(!listening){finish(partial);message="Диктовка завершена.";return}
                     if(error==SpeechRecognizer.ERROR_NO_MATCH||error==SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                        if(listening)nextSegment(partial,300)
-                        else {finish(partial);message="Диктовка завершена."}
+                        consecutiveFailures=0
+                        nextSegment(partial,300)
+                        return
+                    }
+                    if(error in setOf(SpeechRecognizer.ERROR_NETWORK,SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
+                            SpeechRecognizer.ERROR_SERVER,SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY,SpeechRecognizer.ERROR_AUDIO,SpeechRecognizer.ERROR_CLIENT)) {
+                        retrySegment(when(error) {
+                            SpeechRecognizer.ERROR_NETWORK,SpeechRecognizer.ERROR_NETWORK_TIMEOUT->"Нет связи со службой распознавания. Проверь интернет."
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY->"Микрофон занят другой службой."
+                            SpeechRecognizer.ERROR_AUDIO->"Не удалось получить звук с микрофона."
+                            else->"Служба распознавания временно недоступна."
+                        })
                         return
                     }
                     finish(partial)
                     message=when(error) {
                         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS->"Нет доступа к микрофону. Разреши его в настройках приложения."
-                        SpeechRecognizer.ERROR_NETWORK,SpeechRecognizer.ERROR_NETWORK_TIMEOUT,SpeechRecognizer.ERROR_SERVER,SpeechRecognizer.ERROR_SERVER_DISCONNECTED->"Служба распознавания недоступна. Проверь интернет и попробуй ещё раз."
-                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY->"Микрофон занят. Попробуй через несколько секунд."
-                        SpeechRecognizer.ERROR_AUDIO->"Не удалось включить микрофон. Попробуй ещё раз."
                         SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE->"Русский язык недоступен. Добавь его в настройках службы распознавания Android."
                         else->"Не удалось распознать речь. Попробуй ещё раз."
                     }
@@ -150,6 +164,8 @@ class SpeechInput internal constructor(private val context: Context,private val 
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE,"ru-RU")
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,1)
+                // Public Android 13+ request; a recognition service may ignore optional extras.
+                if(Build.VERSION.SDK_INT>=33)putExtra(RecognizerIntent.EXTRA_MASK_OFFENSIVE_WORDS,false)
             })
         } catch(_: Exception) {finish(partial);message="Не удалось запустить распознавание. Проверь службу голосового ввода Android."}
     }
@@ -173,12 +189,31 @@ class SpeechInput internal constructor(private val context: Context,private val 
         message="Продолжаю диктовку…"
         handler.postDelayed(restart,delay)
     }
+    private fun retrySegment(reason: String) {
+        consecutiveFailures++
+        if(consecutiveFailures<=3) {
+            nextSegment(partial,consecutiveFailures*700L)
+            message="Восстанавливаю распознавание… Нажми кнопку, чтобы остановить."
+        } else {
+            finish(partial)
+            message="$reason Распознанный текст сохранён. Попробуй ещё раз."
+        }
+    }
     private fun finish(result: String) {
         accept(result);releaseSegment()
         busy=false;listening=false
     }
     fun cancel() {if(busy){finish(partial);message=null}}
+    fun discard() {
+        // Invalidate pending callbacks before clearing: late results must not refill the field.
+        releaseSegment();accumulated="";partial="";busy=false;listening=false;message=null
+    }
     internal fun close() {cancel();closed=true}
 }
 
-fun appendSpeech(text: String,speech: String): String=if(speech.isBlank())text else if(text.isBlank())speech.trim() else text.trimEnd()+"\n"+speech.trim()
+fun appendSpeech(text: String,speech: String): String=when {
+    speech.isBlank()->text
+    text.isBlank()->speech.trim()
+    text.last().isWhitespace()->text+speech.trim()
+    else->text+" "+speech.trim()
+}

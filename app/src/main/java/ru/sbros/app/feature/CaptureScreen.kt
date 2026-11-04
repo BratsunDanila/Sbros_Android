@@ -24,7 +24,7 @@ import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.core.speech.appendSpeech
 
 @Composable fun CaptureScreen(text: String, change: (String)->Unit, settings: ()->Unit, speech: ()->Unit, later: ()->Unit, analyze: ()->Unit,saving: Boolean=false,
-    speechBusy: Boolean=false,speechListening: Boolean=false,speechPartial: String="",speechMessage: String?=null,speechLevel: Float=0f) {
+    speechBusy: Boolean=false,speechListening: Boolean=false,speechPartial: String="",speechMessage: String?=null,speechLevel: Float=0f,clear: ()->Unit={change("")}) {
     val c=LocalSbrosColors.current
     val focus=LocalFocusManager.current
     val keyboard=LocalSoftwareKeyboardController.current
@@ -61,9 +61,14 @@ import ru.sbros.app.core.speech.appendSpeech
             Spacer(Modifier.height(if(compact)8.dp else 20.dp))
             Paper(Modifier.fillMaxWidth(),21.dp) {
                 Column(Modifier.padding(horizontal=if(compact)12.dp else 15.dp).padding(top=if(compact)10.dp else 15.dp,bottom=if(compact)7.dp else 10.dp)) {
-                    BasicTextField(displayedText,change,Modifier.fillMaxWidth().heightIn(min=if(compact)57.dp else 73.dp).focusProperties {canFocus=!speechBusy&&!saving}.semantics { contentDescription="Текст сброса" },readOnly=speechBusy||saving,
+                    Box(Modifier.fillMaxWidth()) {
+                    BasicTextField(displayedText,change,Modifier.fillMaxWidth().padding(end=if(displayedText.isNotEmpty())40.dp else 0.dp).heightIn(min=if(compact)57.dp else 73.dp).focusProperties {canFocus=!speechBusy&&!saving}.semantics { contentDescription="Текст сброса" },readOnly=speechBusy||saving,
                         textStyle=TextStyle(fontFamily=Onest,fontSize=12.sp,lineHeight=18.7.sp,color=c.ink),cursorBrush=SolidColor(c.primary),
                         decorationBox={ inner -> Box { if(displayedText.isEmpty()) Copy(stringResource(R.string.capture_hint),12f,c.muted); inner() } })
+                    if(displayedText.isNotEmpty())Box(Modifier.align(Alignment.TopEnd).size(40.dp).clip(CircleShape)
+                        .clickable(enabled=!saving,role=Role.Button,onClickLabel="Очистить ввод",onClick=clear)
+                        .semantics {contentDescription="Очистить ввод"},contentAlignment=Alignment.Center) {Glyph(R.drawable.ic_x,15.dp,c.muted)}
+                    }
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                         Copy(stringResource(if(text.isBlank())R.string.no_categories else R.string.imperfect),9f,c.muted,modifier=Modifier.weight(1f))
                         if(displayedText.length>=CAPTURE_TEXT_LIMIT*4/5) Copy("${displayedText.length} / 5 000",9f,if(displayedText.length>CAPTURE_TEXT_LIMIT)c.primary else c.muted)

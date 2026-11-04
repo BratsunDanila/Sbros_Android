@@ -141,7 +141,8 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                                 try {model.prepareAnalysis()?.let {id->model.openAnalysis(id,graph.ai,autoStart=true);nav.navigate("capture/analysis/$id")}}
                                 finally {savingCapture=false}
                             }}},savingCapture,
-                            speechBusy=speech.busy,speechListening=speech.listening,speechPartial=speech.partial,speechMessage=speech.message,speechLevel=speech.level)
+                            speechBusy=speech.busy,speechListening=speech.listening,speechPartial=speech.partial,speechMessage=speech.message,speechLevel=speech.level,
+                            clear={clearNotification();speech.discard();model.clearDraft()})
                     }
                     composable("capture/analysis/{id}") {entry->
                         val id=entry.arguments?.getString("id").orEmpty()

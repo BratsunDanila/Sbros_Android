@@ -49,6 +49,7 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
     fun retry(){loadError.value=false;reload.value++}
     fun clearError(){error.value=null}
     suspend fun flushDraft(){val scope=workspace.value.scope;val text=draft.value;write {repository.draft(scope,text)}}
+    fun clearDraft(){savedState.remove<String>("captureSource");savedState.remove<String>("captureSourceScope");draft("")}
     fun draft(text: String){val value=text;draft.value=value;draftRevision++;val scope=workspace.value.scope
         val pending=pendingDraftWrites[scope]
         if(pending!=null){pending.text=value;return}
