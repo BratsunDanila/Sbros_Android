@@ -16,6 +16,7 @@ enum class SyncOutcome { SUCCESS, RETRY, NEEDS_LOGIN }
 class SyncEngine(private val data: RoomDataRepository,private val auth: AuthRepository) {
     val state=MutableStateFlow(SyncState())
     private val mutex=Mutex()
+    private var lifecycleSchemaChecked=false
     private fun current(userId: String)=auth.state.value.user?.id==userId&&!auth.state.value.needsLogin
     suspend fun run(userId: String): SyncOutcome {
         if(!mutex.tryLock())return SyncOutcome.SUCCESS
@@ -24,6 +25,13 @@ class SyncEngine(private val data: RoomDataRepository,private val auth: AuthRepo
             if(!current(userId))return SyncOutcome.NEEDS_LOGIN
             if(!data.transaction {data.dao.workspace(scope)?.syncEnabled==true})return SyncOutcome.SUCCESS
             state.value=SyncState(userId,true,"Сохраняем изменения…",state.value.takeIf{it.userId==userId}?.lastSyncedAt)
+            // Check before uploading: an older projection would silently discard project lifecycle fields.
+            if(!lifecycleSchemaChecked) {
+                val schema=auth.request(userId,"/rest/v1/rpc/sync_schema_version","{}")
+                checkResponse(schema.status)
+                if((schema.body.trim().toIntOrNull()?:0)<6)throw AuthFailure("Нужно обновить облачную базу: примени 006_project_lifecycle.sql. Записи сохранены на устройстве.")
+                lifecycleSchemaChecked=true
+            }
             val blocked=data.transaction {data.dao.conflicts(scope).map{it.recordId}.toMutableSet()}
             // Dependencies are sent before referring records. A second pass handles edits made in flight.
             repeat(5) {
@@ -127,7 +135,7 @@ class SyncEngine(private val data: RoomDataRepository,private val auth: AuthRepo
             return if(auth.state.value.needsLogin)SyncOutcome.NEEDS_LOGIN else SyncOutcome.RETRY
         } finally {mutex.unlock()}
     }
-    private fun checkResponse(status: Int){if(status !in 200..299)throw AuthFailure(when(status){404->"Нужно обновить облачную базу: примени миграции до 005_atomic_analysis_sync.sql. Записи сохранены на устройстве.";429->"Облако просит подождать. Повторим позже.";else->"Облако пока недоступно. Записи сохранены на устройстве."})}
+    private fun checkResponse(status: Int){if(status !in 200..299)throw AuthFailure(when(status){404->"Нужно обновить облачную базу: примени миграции до 006_project_lifecycle.sql. Записи сохранены на устройстве.";429->"Облако просит подождать. Повторим позже.";else->"Облако пока недоступно. Записи сохранены на устройстве."})}
     private data class ConfirmationGroup(val source: LocalRecord,val results: List<LocalRecord>)
     private fun confirmationGroups(rows: List<LocalRecord>): List<ConfirmationGroup> = rows.filter {row->
         row.kind=="capture"&&JSONObject(row.payload).let {it.optString("status")=="committed"&&!it.optional("analysisCommit").isNullOrBlank()}

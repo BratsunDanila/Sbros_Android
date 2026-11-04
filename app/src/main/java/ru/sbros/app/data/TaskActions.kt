@@ -5,7 +5,10 @@ fun validTaskDeadline(value: String?): Boolean=value.isNullOrBlank()||
 
 data class TaskCompletionUndo(val token: Long, val taskId: Int, val focusBefore: Int?, val statusBefore: String = "next")
 
-val WorkspaceState.availableActions: List<ActionTask> get() = tasks.filter { it.status == "next" }
+val WorkspaceState.availableActions: List<ActionTask> get() {
+    val completed=projects.filter {it.completedAt!=null}.map {it.id}.toSet()
+    return tasks.filter {it.status=="next"&&it.projectId !in completed}
+}
 val WorkspaceState.focusedAction: ActionTask? get() = availableActions.let { list ->
     list.firstOrNull { it.id == focusedTaskId } ?: list.firstOrNull()
 }

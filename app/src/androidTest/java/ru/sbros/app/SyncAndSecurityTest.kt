@@ -42,6 +42,7 @@ private class CloudFixture: HttpTransport {
         if(url.contains("grant_type=refresh_token")){refreshes++;expiresIn=3600;return HttpResult(200,session())}
         if(url.contains("/auth/v1/token")||url.endsWith("/signup"))return HttpResult(200,session())
         if(url.contains("/logout"))return HttpResult(204,"")
+        if(url.endsWith("sync_schema_version"))return HttpResult(200,"6")
         if(url.endsWith("sync_confirm_capture_v1")) {
             val input=JSONObject(body!!);val source=input.getJSONObject("p_capture")
             val prior=records[source.getString("id")]

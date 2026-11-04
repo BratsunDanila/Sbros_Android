@@ -212,6 +212,12 @@ class SbrosViewModel(saved: SavedStateHandle,val settings: SettingsRepository,va
         return change(if(id!=null&&revision!=null)Triple("reference",id,revision)else null) {s->require(id==null||s.materials.any{it.id==id});s.saveMaterial(id,title,body)}
     }
     suspend fun deleteProject(id: Int,revision: String)=change(Triple("project",id,revision)) {it.deleteProject(id)}
+    suspend fun finishProject(id: Int,revision: String)=change(Triple("project",id,revision)) {it.finishProject(id,now())}
+    suspend fun reopenProject(id: Int,revision: String)=change(Triple("project",id,revision)) {it.reopenProject(id)}
+    suspend fun reopenProjectTask(id: Int,revision: String)=change(Triple("action",id,revision)) {s->
+        val task=s.tasks.first {it.id==id&&it.status=="done"}
+        s.saveTask(id,task.title,"next",task.area,task.projectId,task.dueDate)
+    }
     suspend fun deleteMaterial(id: Int,revision: String)=change(Triple("reference",id,revision)) {s->s.copy(materials=s.materials.filterNot{it.id==id})}
     suspend fun deleteCapture(id: String)=change {s->s.copy(captures=s.captures.filterNot{it.id==id})}
     suspend fun inboxToThought(id: String): Boolean {

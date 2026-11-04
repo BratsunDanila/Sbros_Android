@@ -15,6 +15,9 @@ import ru.sbros.app.data.local.*
     Paper(Modifier.fillMaxWidth(),17.dp){SelectionContainer {Column(Modifier.padding(14.dp)) {
         Copy(label,10f,c.muted,750);Spacer(Modifier.height(7.dp))
         Copy(body.optString("title",if(record.optString("kind")=="capture")"Исходный сброс" else "Запись"),14f,weight=750)
+        if(record.optString("kind")=="project") {
+            Spacer(Modifier.height(7.dp));Copy(if(body.optional("completedAt")!=null)"Проект завершён" else "Проект в работе",11f,c.primary)
+        }
         val text=body.optString("text",body.optString("body",body.optString("outcome",body.optString("hint"))))
         if(text.isNotBlank()){Spacer(Modifier.height(7.dp));Copy(text,12f,c.muted2,line=20f)}
         if(!record.isNull("deleted_at")){Spacer(Modifier.height(7.dp));Copy("В этой версии запись удалена",11f,c.muted2)}

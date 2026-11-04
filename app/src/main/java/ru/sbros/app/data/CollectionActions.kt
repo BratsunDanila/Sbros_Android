@@ -8,11 +8,13 @@ fun WorkspaceState.saveTask(id: Int?,title: String,status: String,area: String,p
     val deadline=dueDate?.takeIf {it.isNotBlank()}
     val task=old?.copy(title=title.trim(),status=status,area=area.trim().ifBlank {"Личное"},projectId=projectId,dueDate=deadline)
         ?:ActionTask(nextLocalId("action"),title.trim(),area.trim().ifBlank {"Личное"},0,"",status,projectId,dueDate=deadline)
-    return copy(tasks=if(old==null)tasks+task else tasks.map {if(it.id==id)task else it}).reconcileTaskFocus()
+    return copy(tasks=if(old==null)tasks+task else tasks.map {if(it.id==id)task else it},
+        projects=projects.map {if(it.id==projectId&&status!="done")it.copy(completedAt=null)else it}).reconcileTaskFocus()
 }
 fun WorkspaceState.saveProject(id: Int?,title: String,area: String,outcome: String): WorkspaceState {
     if(title.isBlank()||title.length>500||(id!=null&&projects.none {it.id==id}))return this
-    val project=Project(id?:nextLocalId("project"),title.trim(),area.trim().ifBlank {"Личное"},outcome.trim())
+    val project=projects.find {it.id==id}?.copy(title=title.trim(),area=area.trim().ifBlank {"Личное"},outcome=outcome.trim())
+        ?:Project(id?:nextLocalId("project"),title.trim(),area.trim().ifBlank {"Личное"},outcome.trim())
     return copy(projects=if(id==null)projects+project else projects.map {if(it.id==id)project else it})
 }
 fun WorkspaceState.deleteProject(id: Int): WorkspaceState = copy(

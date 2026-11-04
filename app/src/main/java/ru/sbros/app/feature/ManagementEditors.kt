@@ -79,7 +79,11 @@ import kotlinx.coroutines.launch
         if(task.status=="done")listOf("done" to stringResource(R.string.completed)) else emptyList()
     ReferenceSelect(status,statuses,stringResource(R.string.stored_in),"task-status-input"){status=it}
     ReferenceField(area,{area=it},stringResource(R.string.area),"task-area-input")
-    if(projects.isNotEmpty())ReferenceSelect(projectId?.toString()?:"",listOf("" to "Самостоятельное дело")+projects.map {it.id.toString() to it.title},"Проект","task-project-input") {projectId=it.toIntOrNull()}
+    val selectableProjects=projects.filter {it.completedAt==null||it.id==task.projectId}
+    if(selectableProjects.isNotEmpty())ReferenceSelect(projectId?.toString()?:"",listOf("" to "Самостоятельное дело")+selectableProjects.map {it.id.toString() to it.title},"Проект","task-project-input") {projectId=it.toIntOrNull()}
+    if(status!="done"&&projects.any {it.id==projectId&&it.completedAt!=null}) {
+        Spacer(Modifier.height(10.dp));Copy("Сохранение вернёт этот проект в работу вместе с делом.",11f,LocalSbrosColors.current.muted2,line=17f)
+    }
     DateField(dueDate,{dueDate=it;dateError=false},"Срок","task-due-date-input",placeholder="Без срока")
     if(dueDate.isNotBlank())QuietAction("Убрать срок",R.drawable.ic_left) {dueDate="";dateError=false}
     if(dateError)Copy("Проверь дату: ДД.ММ.ГГГГ или оставь поле пустым.",11f,MaterialTheme.colorScheme.error)

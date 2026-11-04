@@ -38,7 +38,7 @@ import ru.sbros.app.data.*
             Spacer(Modifier.height(13.dp))
             val names=listOf(R.string.projects,R.string.waiting,R.string.someday,R.string.materials)
             val keys=listOf("projects","waiting","someday","notes");val icons=listOf(R.drawable.ic_folder,R.drawable.ic_clock,R.drawable.ic_bulb,R.drawable.ic_note)
-            val counts=listOf(state.projects.size,state.tasks.count {it.status=="waiting"},state.tasks.count {it.status=="someday"},state.materials.size)
+            val counts=listOf(state.projects.count {it.completedAt==null},state.tasks.count {it.status=="waiting"},state.tasks.count {it.status=="someday"},state.materials.size)
             repeat(2) {row -> Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
                 repeat(2) { col -> val n=row*2+col
                     Paper(Modifier.weight(1f).heightIn(min=124.dp).testTag("overview-${keys[n]}").clickable {open(keys[n])},21.dp) {

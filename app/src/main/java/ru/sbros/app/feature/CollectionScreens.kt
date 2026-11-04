@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.*
 import androidx.compose.ui.semantics.*
@@ -13,24 +15,26 @@ import androidx.compose.ui.unit.*
 import ru.sbros.app.R
 import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
+import kotlinx.coroutines.launch
 
 val collectionKeys=setOf("projects","waiting","someday","notes","next","done")
 private fun shelfTitle(key: String)=when(key){"projects"->R.string.projects;"waiting"->R.string.waiting_screen;"someday"->R.string.someday;"notes"->R.string.materials;"done"->R.string.completed;else->R.string.next_actions}
 private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_sub;"waiting"->R.string.waiting_sub;"someday"->R.string.someday_sub;"notes"->R.string.materials_sub;"done"->R.string.done_sub;else->R.string.next_actions_sub}
 
-@Composable private fun CollectionTopBar(backLabel: String,back: ()->Unit,add: ()->Unit,edit: (() -> Unit)?=null) {
+@Composable private fun CollectionTopBar(backLabel: String,back: ()->Unit,add: (() -> Unit)?,edit: (() -> Unit)?=null) {
     val c=LocalSbrosColors.current
     Row(Modifier.fillMaxWidth().height(39.dp),verticalAlignment=Alignment.CenterVertically) {
         QuietAction(backLabel,R.drawable.ic_left,c.muted2,onClick=back)
         Spacer(Modifier.weight(1f))
         if(edit!=null)IconAction(R.drawable.ic_edit,stringResource(R.string.edit_project),edit)
-        IconAction(R.drawable.ic_plus,stringResource(R.string.add),add)
+        if(add!=null)IconAction(R.drawable.ic_plus,stringResource(R.string.add),add)
     }
 }
 
 @Composable fun CollectionScreen(key: String,state: WorkspaceState,back: ()->Unit,add: ()->Unit,
     openProject: (Int)->Unit,editTask: (Int)->Unit,editMaterial: (Int)->Unit,complete: (Int)->Unit) {
     val c=LocalSbrosColors.current
+    var completedExpanded by rememberSaveable {mutableStateOf(false)}
     BoxWithConstraints(Modifier.fillMaxSize().testTag("collection-screen-$key")) {
         LazyColumn(Modifier.fillMaxSize().testTag("collection-list"),contentPadding=PaddingValues(start=if(maxWidth<350.dp)15.dp else 20.dp,end=if(maxWidth<350.dp)15.dp else 20.dp,top=18.dp,bottom=24.dp)) {
             item(key="header") {
@@ -42,12 +46,21 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
             }
             when(key) {
                 "projects" -> {
-                    items(state.projects,key={"project-${it.id}"}) {project ->
-                        val count=state.tasks.count {it.projectId==project.id&&it.status!="done"}
-                        CollectionRow(project.title,pluralStringResource(R.plurals.project_actions,count,count),R.drawable.ic_folder,"project-row-${project.id}") {openProject(project.id)}
+                    val active=state.projects.filter {it.completedAt==null}
+                    val completed=state.projects.filter {it.completedAt!=null}.sortedByDescending {it.completedAt}
+                    items(active,key={"project-${it.id}"}) {project ->
+                        ProjectCollectionRow(project,state.projectProgress(project.id)) {openProject(project.id)}
                         Spacer(Modifier.height(9.dp))
                     }
                     if(state.projects.isEmpty())item {EmptyCollection()}
+                    else if(active.isEmpty())item {Copy("Активных проектов пока нет.",color=c.muted2,modifier=Modifier.padding(vertical=16.dp))}
+                    if(completed.isNotEmpty()) {
+                        item(key="completed-projects") {FoldRow("Завершённые · ${completed.size}",completedExpanded){completedExpanded=!completedExpanded}}
+                        if(completedExpanded)items(completed,key={"project-${it.id}"}) {project->
+                            ProjectCollectionRow(project,state.projectProgress(project.id)){openProject(project.id)}
+                            Spacer(Modifier.height(9.dp))
+                        }
+                    }
                 }
                 "notes" -> {
                     items(state.materials,key={"material-${it.id}"}) {material ->
@@ -57,7 +70,7 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
                     if(state.materials.isEmpty())item {EmptyCollection()}
                 }
                 else -> {
-                    val tasks=state.tasks.filter {it.status==key}.let {if(key=="done")it.reversed()else it}
+                    val tasks=(if(key=="next")state.availableActions else state.tasks.filter {it.status==key}).let {if(key=="done")it.reversed()else it}
                     if(key=="next") {
                         items(projectTaskGroups(tasks,state.projects),key={it.key}) {group ->
                             if(group.project!=null)ProjectTaskGroup(group) {task ->
@@ -81,29 +94,98 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
     }
 }
 
-@Composable fun ProjectScreen(project: Project?,state: WorkspaceState,back: ()->Unit,add: ()->Unit,edit: ()->Unit,editTask: (Int)->Unit,complete: (Int)->Unit) {
+@Composable fun ProjectScreen(project: Project?,state: WorkspaceState,back: ()->Unit,add: ()->Unit,edit: ()->Unit,editTask: (Int)->Unit,complete: (Int)->Unit,
+    finish: suspend ()->Boolean,reopen: suspend ()->Boolean,reopenTask: suspend (Int)->Boolean) {
     val c=LocalSbrosColors.current
+    val scope=rememberCoroutineScope()
+    var completedExpanded by rememberSaveable(project?.id) {mutableStateOf(false)}
+    var busy by remember(project?.id) {mutableStateOf(false)}
+    val archived=project?.completedAt!=null
+    val tasks=state.tasks.filter {project!=null&&it.projectId==project.id}
+    val active=tasks.filter {it.status!="done"}
+    val done=tasks.filter {it.status=="done"}
+    val progress=ProjectProgress(done.size,tasks.size)
+    fun perform(action: suspend ()->Boolean) {if(!busy){busy=true;scope.launch {try {action()}finally{busy=false}}}}
     BoxWithConstraints(Modifier.fillMaxSize().testTag("project-screen")) {
         LazyColumn(Modifier.fillMaxSize().testTag("project-actions-list"),contentPadding=PaddingValues(start=if(maxWidth<350.dp)15.dp else 20.dp,end=if(maxWidth<350.dp)15.dp else 20.dp,top=18.dp,bottom=24.dp)) {
             item(key="hero") {
-                CollectionTopBar(stringResource(R.string.projects),back,add,if(project!=null)edit else null)
+                CollectionTopBar(stringResource(R.string.projects),back,if(project!=null&&!archived)add else null,if(project!=null)edit else null)
                 Spacer(Modifier.height(30.dp))
                 if(project!=null) Paper(Modifier.fillMaxWidth().testTag("project-hero").clickable(onClick=edit),24.dp,true) {
                     Column(Modifier.padding(22.dp)) {
                         Copy(project.area,10f,c.muted2,700,Modifier.background(c.soft,RoundedCornerShape(13.dp)).padding(horizontal=10.dp,vertical=7.dp))
                         Spacer(Modifier.height(8.dp));Copy(project.title,24f,weight=700,line=28.8f,tracking=-1.2f)
                         Spacer(Modifier.height(8.dp));Copy(project.outcome,12f,c.muted2,line=19.2f)
+                        Spacer(Modifier.height(17.dp));ProjectProgressLine(progress)
+                        if(archived){Spacer(Modifier.height(10.dp));Copy("Завершён ${projectDate(project.completedAt!!)}",11f,c.muted2)}
                     }
                 } else EmptyCollection()
-                Row(Modifier.fillMaxWidth().padding(top=21.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+                if(project!=null&&archived) {
+                    Spacer(Modifier.height(16.dp))
+                    ActionButton(if(busy)"Сохраняем…" else "Вернуть в работу",{perform(reopen)},Modifier.fillMaxWidth(),primary=false,enabled=!busy)
+                } else if(project!=null&&project.completionReady&&progress.allDone) {
+                    Spacer(Modifier.height(16.dp))
+                    Paper(Modifier.fillMaxWidth(),22.dp) {Column(Modifier.padding(18.dp)) {
+                        Copy("Все шаги выполнены.",17f,weight=750,tracking=-.5f)
+                        Spacer(Modifier.height(6.dp));Copy("Результат достигнут? Можно завершить проект или добавить ещё один шаг.",12f,c.muted2,line=19f)
+                        Spacer(Modifier.height(15.dp))
+                        ActionButton(if(busy)"Сохраняем…" else "Завершить проект",{perform(finish)},Modifier.fillMaxWidth(),enabled=!busy)
+                        QuietAction("Добавить шаг",R.drawable.ic_plus){if(!busy)add()}
+                    }}
+                }
+                if(project!=null&&!archived)Row(Modifier.fillMaxWidth().padding(top=21.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
                     Eyebrow(stringResource(R.string.project_actions_label),c.muted2,10f)
                     QuietAction(stringResource(R.string.add),R.drawable.ic_plus,onClick=add)
                 }
                 Spacer(Modifier.height(13.dp))
             }
-            val tasks=state.tasks.filter {project!=null&&it.projectId==project.id}
-            items(tasks,key={"project-task-${it.id}"}) {task ->ManagementTaskRow(task,state,complete,showProject=false){editTask(task.id)};Spacer(Modifier.height(8.dp))}
-            if(tasks.isEmpty()&&project!=null)item {Copy(stringResource(R.string.add_small_step),color=c.muted2,modifier=Modifier.fillMaxWidth().padding(26.dp),align=androidx.compose.ui.text.style.TextAlign.Center)}
+            items(active,key={"project-task-${it.id}"}) {task ->ManagementTaskRow(task,state,complete,showProject=false){editTask(task.id)};Spacer(Modifier.height(8.dp))}
+            if(tasks.isEmpty()&&project!=null)item {Copy(if(archived)"В проекте нет шагов." else stringResource(R.string.add_small_step),color=c.muted2,modifier=Modifier.fillMaxWidth().padding(26.dp),align=androidx.compose.ui.text.style.TextAlign.Center)}
+            else if(project!=null&&active.isEmpty()&&!archived&&!(project.completionReady&&progress.allDone))item {Copy("Незавершённых шагов нет. Можно добавить новое действие.",color=c.muted2,modifier=Modifier.padding(vertical=16.dp))}
+            if(done.isNotEmpty()) {
+                item(key="completed-steps") {FoldRow("Выполнено · ${done.size}",completedExpanded){completedExpanded=!completedExpanded}}
+                if(completedExpanded)items(done,key={"project-task-${it.id}"}) {task->
+                    ManagementTaskRow(task,state,complete,showProject=false,reopen={id->perform {reopenTask(id)}}){editTask(task.id)}
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+private fun projectDate(value: String)=runCatching {java.time.Instant.parse(value).atZone(java.time.ZoneId.systemDefault()).toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))}.getOrDefault("")
+
+@Composable private fun FoldRow(label: String,expanded: Boolean,toggle: ()->Unit) {
+    val c=LocalSbrosColors.current
+    Row(Modifier.fillMaxWidth().clickable(onClick=toggle).padding(vertical=18.dp).semantics {stateDescription=if(expanded)"Развёрнуто" else "Свёрнуто"},verticalAlignment=Alignment.CenterVertically) {
+        Copy(label,12f,c.muted2,700,Modifier.weight(1f))
+        Copy(if(expanded)"−" else "+",20f,c.muted2)
+    }
+}
+
+@Composable private fun ProjectProgressLine(progress: ProjectProgress) {
+    val c=LocalSbrosColors.current
+    Copy(progress.label,11f,c.muted2,line=16f)
+    if(progress.total>0) {
+        Spacer(Modifier.height(9.dp))
+        Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(c.soft)) {
+            if(progress.done>0)Box(Modifier.fillMaxHeight().fillMaxWidth(progress.done.toFloat()/progress.total).background(c.primary.copy(alpha=.65f)))
+        }
+    }
+}
+
+@Composable private fun ProjectCollectionRow(project: Project,progress: ProjectProgress,open: ()->Unit) {
+    val c=LocalSbrosColors.current
+    Paper(Modifier.fillMaxWidth().testTag("project-row-${project.id}").clickable(onClick=open),20.dp) {
+        Row(Modifier.fillMaxWidth().padding(15.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(13.dp)) {
+            Box(Modifier.size(39.dp).background(c.soft,RoundedCornerShape(13.dp)),contentAlignment=Alignment.Center){Glyph(if(project.completedAt==null)R.drawable.ic_folder else R.drawable.ic_check,20.dp)}
+            Column(Modifier.weight(1f)) {
+                Copy(project.title,13f,weight=750,line=18f)
+                Spacer(Modifier.height(6.dp))
+                if(project.completedAt!=null)Copy("Завершён ${projectDate(project.completedAt)}",11f,c.muted2)
+                else ProjectProgressLine(progress)
+            }
+            Glyph(R.drawable.ic_chevron,16.dp,c.muted)
         }
     }
 }
@@ -118,11 +200,11 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
         }
     }
 }
-@Composable internal fun ManagementTaskRow(task: ActionTask,state: WorkspaceState,complete: (Int)->Unit,showDeadline: Boolean=true,showProject: Boolean=true,embedded: Boolean=false,edit: ()->Unit) {
+@Composable internal fun ManagementTaskRow(task: ActionTask,state: WorkspaceState,complete: (Int)->Unit,showDeadline: Boolean=true,showProject: Boolean=true,embedded: Boolean=false,reopen: ((Int)->Unit)?=null,edit: ()->Unit) {
     val c=LocalSbrosColors.current
     TaskRowSurface(Modifier.fillMaxWidth().testTag("management-task-${task.id}"),20.dp,embedded) {
         Row(Modifier.fillMaxWidth().padding(start=5.dp,end=8.dp,top=12.dp,bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {
-            Box(Modifier.size(43.dp).semantics {contentDescription="Выполнить ${task.title}"}.clickable(enabled=task.status!="done",onClick={complete(task.id)}),contentAlignment=Alignment.Center) {
+            Box(Modifier.size(43.dp).semantics {contentDescription=if(task.status!="done")"Выполнить ${task.title}" else if(reopen!=null)"Вернуть в работу: ${task.title}" else "Выполнено: ${task.title}"}.clickable(enabled=task.status!="done"||reopen!=null,onClick={if(task.status=="done")reopen?.invoke(task.id)else complete(task.id)}),contentAlignment=Alignment.Center) {
                 Box(Modifier.size(21.dp).background(if(task.status=="done")c.good else androidx.compose.ui.graphics.Color.Transparent,CircleShape).border(1.5.dp,if(task.status=="done")c.good else c.muted,CircleShape),contentAlignment=Alignment.Center){if(task.status=="done")Glyph(R.drawable.ic_check,16.dp,androidx.compose.ui.graphics.Color.White)}
             }
             Row(Modifier.weight(1f).heightIn(min=44.dp).testTag("management-edit-task-${task.id}").clickable(onClick=edit),verticalAlignment=Alignment.CenterVertically) {

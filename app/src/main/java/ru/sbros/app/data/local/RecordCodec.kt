@@ -18,7 +18,11 @@ internal object RecordCodec {
     fun decode(records: List<LocalRecord>,ui: String): WorkspaceState {
         val rows=records.filter {it.deletedAt==null}
         fun of(kind: String)=rows.filter {it.kind==kind}
-        val projects=of("project").map {r->val p=JSONObject(r.payload);Project(r.localId,p.getString("title"),p.optString("area"),p.optString("outcome"))}
+        val projectSteps=of("action").groupBy {it.projectId}
+        val projects=of("project").map {r->val p=JSONObject(r.payload)
+            val steps=projectSteps[r.id].orEmpty()
+            val ready=if(p.has("completionReady"))p.optBoolean("completionReady") else steps.isNotEmpty()&&steps.all {JSONObject(it.payload).optString("status")=="done"}
+            Project(r.localId,p.getString("title"),p.optString("area"),p.optString("outcome"),p.optional("completedAt"),ready)}
         val projectIds=of("project").associate {it.id to it.localId}
         val captures=of("capture").sortedByDescending {it.createdAt}.map {r->val p=JSONObject(r.payload);StoredCapture(r.id,p.getString("text"),r.createdAt,p.optString("status","inbox"),p.optional("confirmedAt"),p.optString("source","text"),r.captureId)}
         val tasks=of("action").map {r->val p=JSONObject(r.payload);ActionTask(r.localId,p.getString("title"),p.optString("area"),p.optInt("energy"),p.optString("hint"),p.getString("status"),projectIds[r.projectId],r.captureId,p.optional("dueDate"))}
@@ -44,7 +48,18 @@ internal object RecordCodec {
             if(body.toByteArray(Charsets.UTF_8).size>240_000)throw RecordTooLarge()
             output+=LocalRecord().also {r->r.scope=scope;r.id=before?.id?:stableId?:uuid();r.kind=kind;r.localId=id;r.payload=body;r.projectId=project;r.captureId=captureRef;r.createdAt=before?.createdAt?:created?:timestamp;r.updatedAt=timestamp;r.serverVersion=before?.serverVersion?:0;r.changeId=uuid();r.dirty=true}
         }
-        state.projects.forEach {p->add("project",p.id,JSONObject().put("title",p.title).put("area",p.area).put("outcome",p.outcome))}
+        state.projects.forEach {p->
+            val before=prior["project" to p.id]
+            val steps=state.tasks.filter {it.projectId==p.id}
+            val previousSteps=old.filter {before!=null&&it.kind=="action"&&it.projectId==before.id&&it.deletedAt==null}
+            val justCompleted=steps.any {step->step.status=="done"&&previousSteps.any {it.localId==step.id&&JSONObject(it.payload).optString("status")!="done"}}
+            val removedUnfinished=previousSteps.any {oldStep->JSONObject(oldStep.payload).optString("status")!="done"&&steps.none {it.id==oldStep.localId}}
+            val allDone=steps.isNotEmpty()&&steps.all {it.status=="done"}
+            val ready=allDone&&(justCompleted||p.completionReady&&!removedUnfinished)
+            val completedAt=p.completedAt.takeIf {steps.none {it.status!="done"}}
+            add("project",p.id,JSONObject().put("title",p.title).put("area",p.area).put("outcome",p.outcome)
+                .put("completedAt",completedAt?:JSONObject.NULL).put("completionReady",ready))
+        }
         val projectUuids=output.filter {it.kind=="project"}.associate {it.localId to it.id}
         state.tasks.forEach {t->val completed=if(t.status=="done")prior["action" to t.id]?.let {JSONObject(it.payload).optional("completedAt")}?:timestamp else null
             add("action",t.id,JSONObject().put("title",t.title).put("area",t.area).put("energy",t.energy).put("hint",t.hint).put("status",t.status).put("dueDate",t.dueDate?:JSONObject.NULL).put("completedAt",completed?:JSONObject.NULL),projectUuids[t.projectId],t.captureId)}

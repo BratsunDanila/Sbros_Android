@@ -183,7 +183,10 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                     }
                     composable("overview/project/{id}") {entry->
                         val id=entry.arguments?.getString("id")?.toIntOrNull()?:0
-                        ProjectScreen(state.projects.find {it.id==id},state,{nav.popBackStack()},{addEntry(projectId=id)},{selectedProject=id;editorRevision=revision("project",id);sheet="project-edit"},::editTask,::completeTask)
+                        ProjectScreen(state.projects.find {it.id==id},state,{nav.popBackStack()},{addEntry(projectId=id)},{selectedProject=id;editorRevision=revision("project",id);sheet="project-edit"},::editTask,::completeTask,
+                            finish={val saved=model.finishProject(id,revision("project",id));if(saved)notify("Проект завершён. Он сохранён в завершённых.");saved},
+                            reopen={val saved=model.reopenProject(id,revision("project",id));if(saved)notify("Проект снова в работе");saved},
+                            reopenTask={taskId->val saved=model.reopenProjectTask(taskId,revision("action",taskId));if(saved)notify("Шаг возвращён в работу");saved})
                     }
                     composable("thought/{id}") {entry ->
                         val id=entry.arguments?.getString("id")?.toIntOrNull()?:0
