@@ -21,6 +21,7 @@ import ru.sbros.app.core.designsystem.*
 import ru.sbros.app.data.*
 import java.util.Locale
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 @Composable fun ReferenceField(value: String,change: (String)->Unit,label: String,tag: String=label,multiline: Boolean=false,placeholder: String="",minimumHeight: Dp?=null) {
     val c=LocalSbrosColors.current
@@ -63,7 +64,31 @@ import kotlinx.coroutines.launch
     Spacer(Modifier.height(10.dp));ActionButton(stringResource(R.string.cancel),cancel,Modifier.fillMaxWidth().testTag("editor-cancel"),primary=false,minHeight=44.dp)
 }
 
-@Composable fun TaskEditor(task: ActionTask,cancel: ()->Unit,projects: List<Project> = emptyList(),save: suspend (String,String,String,String?,Int?)->Boolean) {
+@Composable internal fun DeleteRecordAction(label: String,description: String,enabled: Boolean=true,iconOnly: Boolean=false,delete: suspend ()->Boolean) {
+    val scope=rememberCoroutineScope()
+    var confirming by rememberSaveable {mutableStateOf(false)}
+    var busy by remember {mutableStateOf(false)}
+    var failed by remember {mutableStateOf(false)}
+    fun request(){if(enabled&&!busy){failed=false;confirming=true}}
+    if(iconOnly)IconAction(R.drawable.ic_trash,label,::request)
+    else QuietAction(if(busy)"Удаляем…" else label,R.drawable.ic_trash,MaterialTheme.colorScheme.error, onClick=::request)
+    if(confirming)AlertDialog(onDismissRequest={if(!busy)confirming=false},
+        title={Copy("$label?",21f,weight=750)},text={Column {
+            Copy(description,13f,line=21f)
+            if(failed){Spacer(Modifier.height(10.dp));Copy("Не удалось удалить. Попробуй ещё раз.",12f,MaterialTheme.colorScheme.error)}
+        }},
+        confirmButton={TextButton(enabled=!busy&&enabled,onClick={
+            if(!busy){busy=true;scope.launch {
+                try {if(delete())confirming=false else failed=true}
+                catch(e: CancellationException){throw e}
+                catch(e: Exception){failed=true}
+                finally {busy=false}
+            }}
+        }){Text(if(busy)"Удаляем…" else "Удалить",color=MaterialTheme.colorScheme.error)}},
+        dismissButton={TextButton(enabled=!busy,onClick={confirming=false}){Text("Отмена")}})
+}
+
+@Composable fun TaskEditor(task: ActionTask,cancel: ()->Unit,projects: List<Project> = emptyList(),delete: suspend ()->Boolean,save: suspend (String,String,String,String?,Int?)->Boolean) {
     val scope=rememberCoroutineScope()
     var title by rememberSaveable(task.id){mutableStateOf(task.title)}
     var status by rememberSaveable(task.id){mutableStateOf(task.status)}
@@ -92,6 +117,9 @@ import kotlinx.coroutines.launch
         if(!validTaskDeadline(dueDate))dateError=true
         else if(!submitted){submitted=true;scope.launch {if(!save(title,status,area,dueDate.takeIf {it.isNotBlank()},projectId)){submitted=false;error=true}}}
     },cancel)
+    Spacer(Modifier.height(10.dp))
+    DeleteRecordAction(if(task.projectId!=null)"Удалить шаг" else "Удалить дело",
+        if(task.projectId!=null)"Этот шаг исчезнет из проекта и общих списков дел. Проект, остальные шаги и исходный сброс останутся." else "Дело исчезнет из списка и календаря. Исходный сброс останется.",enabled=!submitted,delete=delete)
 }
 
 @Composable fun NewEntryEditor(initialKind: String,cancel: ()->Unit,save: suspend (String,String,String?)->Boolean) {
@@ -125,7 +153,6 @@ import kotlinx.coroutines.launch
     var outcome by rememberSaveable(project.id){mutableStateOf(project.outcome)}
     var submitted by remember(project.id){mutableStateOf(false)}
     var error by rememberSaveable(project.id){mutableStateOf(false)}
-    var deleting by rememberSaveable(project.id){mutableStateOf(false)}
     EditorHeading(stringResource(R.string.project))
     ReferenceField(title,{title=it},stringResource(R.string.title_label),"project-title-input")
     ReferenceField(outcome,{outcome=it},stringResource(R.string.project_result),"project-outcome-input",true)
@@ -134,8 +161,7 @@ import kotlinx.coroutines.launch
     EditorActions(title.isNotBlank()&&title.length<=500&&!submitted,stringResource(R.string.save),{
         if(!submitted){submitted=true;scope.launch {if(!save(title,area,outcome)){submitted=false;error=true}}}
     },cancel)
-    QuietAction(stringResource(R.string.delete_project),R.drawable.ic_trash,MaterialTheme.colorScheme.error){deleting=true}
-    if(deleting)AlertDialog(onDismissRequest={deleting=false},title={Copy(stringResource(R.string.delete_project_question),20f,weight=700)},text={Copy(stringResource(R.string.project_tasks_kept))},confirmButton={TextButton(onClick={if(!submitted){submitted=true;deleting=false;scope.launch {if(!delete()){submitted=false;error=true}}}}){Text(stringResource(R.string.delete))}},dismissButton={TextButton(onClick={deleting=false}){Text(stringResource(R.string.cancel))}})
+    DeleteRecordAction(stringResource(R.string.delete_project),stringResource(R.string.project_tasks_kept),enabled=!submitted,delete=delete)
 }
 @Composable fun MaterialEditor(material: ReferenceMaterial,cancel: ()->Unit,save: suspend (String,String)->Boolean,delete: suspend ()->Boolean) {
     val scope=rememberCoroutineScope()
@@ -150,5 +176,5 @@ import kotlinx.coroutines.launch
     EditorActions(title.isNotBlank()&&title.length<=500&&!submitted,stringResource(R.string.save),{
         if(!submitted){submitted=true;scope.launch {if(!save(title,body)){submitted=false;error=true}}}
     },cancel)
-    QuietAction(stringResource(R.string.delete_material),R.drawable.ic_trash,MaterialTheme.colorScheme.error){if(!submitted){submitted=true;scope.launch {if(!delete()){submitted=false;error=true}}}}
+    DeleteRecordAction(stringResource(R.string.delete_material),"Материал исчезнет из списка. Исходная запись и остальные результаты сброса останутся.",enabled=!submitted,delete=delete)
 }

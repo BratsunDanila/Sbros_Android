@@ -57,7 +57,7 @@ class TaskListUiTest {
     @Test fun sourceLinkIsOnlyShownWhenOriginalIsAvailable() {
         var thought by mutableStateOf(fixtures().thoughts.first())
         var opened=false
-        rule.setContent {SbrosTheme("lavender",false) {Surface {ThoughtDetail(thought,{},{},{opened=it=="thought-source"},{})}}}
+        rule.setContent {SbrosTheme("lavender",false) {Surface {ThoughtDetail(thought,{},{},{opened=it=="thought-source"},{true})}}}
         rule.onNodeWithText("Посмотреть исходный сброс").assertDoesNotExist()
         rule.runOnIdle {thought=thought.copy(sourceText="Полный исходный текст сброса")}
         rule.onNodeWithText("Посмотреть исходный сброс").performScrollTo().performClick()

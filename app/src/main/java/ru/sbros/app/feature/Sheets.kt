@@ -40,9 +40,9 @@ import kotlinx.coroutines.launch
         when {title.isBlank()||title.length>500->error="Укажи название до 500 символов";runCatching {LocalDate.parse(day)}.isFailure->error="Проверь дату: ДД.ММ.ГГГГ";time.isNotBlank()&&runCatching {LocalTime.parse(time)}.isFailure->error="Проверь время: ЧЧ:ММ"
             else->if(!submitted){submitted=true;scope.launch {if(!save(CalendarEvent(event?.id?:0,title.trim(),day,time))){submitted=false;error="Не удалось сохранить. Повтори попытку."}}}}
     },Modifier.fillMaxWidth(),enabled=!submitted)
-    if(event!=null) {Spacer(Modifier.height(9.dp));ActionButton("Удалить событие",{if(!submitted){submitted=true;scope.launch {if(!delete()){submitted=false;error="Не удалось удалить. Повтори попытку."}}}},Modifier.fillMaxWidth(),false,enabled=!submitted)}
+    if(event!=null) {Spacer(Modifier.height(9.dp));DeleteRecordAction("Удалить событие","Событие исчезнет из календаря. Остальные записи и исходный сброс останутся.",enabled=!submitted,delete=delete)}
 }
-@Composable fun ThoughtDetail(thought: Thought,back: ()->Unit,favorite: ()->Unit,open: (String)->Unit,delete: ()->Unit) {
+@Composable fun ThoughtDetail(thought: Thought,back: ()->Unit,favorite: ()->Unit,open: (String)->Unit,delete: suspend ()->Boolean) {
     val c=LocalSbrosColors.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=20.dp,vertical=18.dp)) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {QuietAction(stringResource(R.string.thoughts),R.drawable.ic_left,c.muted2,onClick=back);IconAction(R.drawable.ic_heart,if(thought.favorite)"Убрать из избранного" else "В избранное",favorite)}
@@ -55,7 +55,10 @@ import kotlinx.coroutines.launch
         listOf(Triple("Продолжить мысль",R.drawable.ic_spark,"continue"),Triple("Похожие",R.drawable.ic_layers,"related"),Triple("В действие",R.drawable.ic_bolt,"to-action")).forEach {(label,icon,key)->
             Paper(Modifier.fillMaxWidth().clickable {open(key)},15.dp) {Row(Modifier.padding(horizontal=14.dp,vertical=13.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)){Glyph(icon,16.dp);Copy(label,12f,weight=700)}};Spacer(Modifier.height(7.dp))
         }
-        Spacer(Modifier.height(28.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {QuietAction(stringResource(R.string.edit),R.drawable.ic_edit,c.muted2){open("edit-thought")};QuietAction(stringResource(R.string.delete),R.drawable.ic_trash,c.muted2,onClick=delete)}
+        Spacer(Modifier.height(28.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+            QuietAction(stringResource(R.string.edit),R.drawable.ic_edit,c.muted2){open("edit-thought")}
+            DeleteRecordAction(if(thought.idea)"Удалить идею" else "Удалить запись","Запись исчезнет из «Мыслей». Связанные дела и исходный сброс останутся.",delete=delete)
+        }
     }
 }
 @Composable fun ThoughtEditSheet(thought: Thought,mode: String,save: suspend (Thought)->Boolean,action: suspend (String)->Boolean) {
@@ -88,7 +91,9 @@ import kotlinx.coroutines.launch
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                 QuietAction("Разобрать",R.drawable.ic_spark){if(!acted){acted=true;resume(capture)}}
                 QuietAction("В мысли",R.drawable.ic_feather){if(!acted){acted=true;scope.launch {if(!toThought(capture.id))acted=false}}}
-                Box(Modifier.size(40.dp).semantics {contentDescription="Удалить входящую запись"}.clickable {if(!acted){acted=true;scope.launch {if(!delete(capture.id))acted=false}}},contentAlignment=Alignment.Center){Glyph(R.drawable.ic_trash,16.dp,c.muted)}
+                DeleteRecordAction("Удалить входящую запись","Запись исчезнет из входящих и истории сбросов. Остальные записи останутся.",enabled=!acted,iconOnly=true) {
+                    val saved=delete(capture.id);if(saved)acted=true;saved
+                }
             }
         }};Spacer(Modifier.height(10.dp))
     }}

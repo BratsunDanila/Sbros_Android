@@ -111,15 +111,7 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
             item(key="hero") {
                 CollectionTopBar(stringResource(R.string.projects),back,if(project!=null&&!archived)add else null,if(project!=null)edit else null)
                 Spacer(Modifier.height(30.dp))
-                if(project!=null) Paper(Modifier.fillMaxWidth().testTag("project-hero").clickable(onClick=edit),24.dp,true) {
-                    Column(Modifier.padding(22.dp)) {
-                        Copy(project.area,10f,c.muted2,700,Modifier.background(c.soft,RoundedCornerShape(13.dp)).padding(horizontal=10.dp,vertical=7.dp))
-                        Spacer(Modifier.height(8.dp));Copy(project.title,24f,weight=700,line=28.8f,tracking=-1.2f)
-                        Spacer(Modifier.height(8.dp));Copy(project.outcome,12f,c.muted2,line=19.2f)
-                        Spacer(Modifier.height(17.dp));ProjectProgressLine(progress)
-                        if(archived){Spacer(Modifier.height(10.dp));Copy("Завершён ${projectDate(project.completedAt!!)}",11f,c.muted2)}
-                    }
-                } else EmptyCollection()
+                if(project!=null)ProjectHero(project,progress,edit) else EmptyCollection()
                 if(project!=null&&archived) {
                     Spacer(Modifier.height(16.dp))
                     ActionButton(if(busy)"Сохраняем…" else "Вернуть в работу",{perform(reopen)},Modifier.fillMaxWidth(),primary=false,enabled=!busy)
@@ -149,6 +141,44 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
                     Spacer(Modifier.height(8.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable private fun ProjectHero(project: Project,progress: ProjectProgress,edit: ()->Unit) {
+    val c=LocalSbrosColors.current
+    val archived=project.completedAt!=null
+    Paper(Modifier.fillMaxWidth().testTag("project-hero").clickable(onClick=edit),25.dp,true) {
+        Column(Modifier.padding(20.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Box(Modifier.size(38.dp).background(c.card.copy(alpha=.8f),RoundedCornerShape(13.dp)),contentAlignment=Alignment.Center) {
+                    Glyph(R.drawable.ic_folder,20.dp)
+                }
+                Spacer(Modifier.width(10.dp))
+                Copy(project.area.ifBlank {"Личное"},10.5f,c.muted2,650,Modifier.weight(1f),maxLines=1)
+                Spacer(Modifier.width(8.dp))
+                Row(Modifier.background(c.card.copy(alpha=.65f),RoundedCornerShape(12.dp)).padding(horizontal=9.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically) {
+                    Box(Modifier.size(5.dp).background(if(archived)c.good else c.primary,CircleShape))
+                    Spacer(Modifier.width(5.dp));Copy(if(archived)"Завершён" else "В работе",9.5f,c.muted2,650)
+                }
+            }
+            Spacer(Modifier.height(17.dp))
+            Copy(project.title,27f,weight=750,line=32f,tracking=-1.35f)
+            Spacer(Modifier.height(14.dp))
+            if(project.outcome.isNotBlank()) {
+                Eyebrow("Результат",c.muted2,8f)
+                Spacer(Modifier.height(6.dp));Copy(project.outcome,12.5f,c.muted2,line=20f,maxLines=4)
+            } else {
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    Glyph(R.drawable.ic_edit,13.dp,c.muted2);Spacer(Modifier.width(6.dp))
+                    Copy("Добавь желаемый результат",11f,c.muted2,line=17f)
+                }
+            }
+            Spacer(Modifier.height(17.dp))
+            androidx.compose.material3.HorizontalDivider(color=c.primary.copy(alpha=.12f))
+            Spacer(Modifier.height(14.dp))
+            ProjectProgressLine(progress)
+            if(archived){Spacer(Modifier.height(9.dp));Copy("Завершён ${projectDate(project.completedAt!!)}",10f,c.muted2)}
         }
     }
 }

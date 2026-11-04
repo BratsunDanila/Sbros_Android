@@ -192,7 +192,10 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                     composable("thought/{id}") {entry ->
                         val id=entry.arguments?.getString("id")?.toIntOrNull()?:0
                         val thought=state.thoughts.find {it.id==id}
-                        if(thought!=null) ThoughtDetail(thought,{nav.popBackStack()},{model.favorite(id)},{selectedThought=id;editorRevision=revision("thought",id);sheet=it},{scope.launch {if(model.mutateAwait {s->s.copy(thoughts=s.thoughts.filter {it.id!=id})}){nav.popBackStack();notify("Запись удалена",true)}}})
+                        if(thought!=null) ThoughtDetail(thought,{nav.popBackStack()},{model.favorite(id)},{selectedThought=id;editorRevision=revision("thought",id);sheet=it},{
+                            val saved=model.mutateAwait(Triple("thought",id,revision("thought",id))) {s->s.copy(thoughts=s.thoughts.filter {it.id!=id})}
+                            if(saved){nav.popBackStack();notify("Запись удалена",true)};saved
+                        })
                     }
                 }
             }
@@ -211,7 +214,8 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                             openAi={sheet="ai-settings"},close={sheet=""})}
                     }
                     "event" -> EventSheet(state.events.find {it.id==selectedEvent},eventDate,{e ->val saved=model.mutateAwait(if(selectedEvent!=0)Triple("event",selectedEvent,editorRevision)else null) {s->val event=if(e.id==0)e.copy(id=s.nextLocalId("event"))else e;s.copy(events=s.events.filter {it.id!=event.id}+event)};if(saved)sheet="";saved},{val saved=model.mutateAwait(Triple("event",selectedEvent,editorRevision)) {s->s.copy(events=s.events.filter {it.id!=selectedEvent})};if(saved){sheet="";notify("Событие удалено",true)};saved})
-                    "task-edit" -> state.tasks.find {it.id==selectedTask}?.let {task->TaskEditor(task,{sheet=""},projects=state.projects) {title,status,area,dueDate,projectId->
+                    "task-edit" -> state.tasks.find {it.id==selectedTask}?.let {task->TaskEditor(task,{sheet=""},projects=state.projects,
+                        delete={val saved=model.deleteTask(task.id,editorRevision);if(saved){sheet="";notify(if(task.projectId!=null)"Шаг удалён" else "Дело удалено",true)};saved}) {title,status,area,dueDate,projectId->
                         val saved=model.saveTask(task.id,title,status,area,projectId,editorRevision,dueDate);if(saved)sheet="";saved
                     }}
                     "new-entry" -> NewEntryEditor(newKind,{sheet=""}) {title,kind,dueDate->
@@ -227,7 +231,7 @@ private val destinations=listOf(Destination("tasks",R.string.tasks,R.drawable.ic
                     "edit-thought","continue","to-action" -> state.thoughts.find {it.id==selectedThought}?.let {thought -> ThoughtEditSheet(thought,sheet,{updated ->val saved=model.mutateAwait(Triple("thought",thought.id,editorRevision)) {s->s.copy(thoughts=s.thoughts.map {if(it.id==thought.id)updated else it})};if(saved)sheet="";saved},{title ->val saved=model.mutateAwait {s->s.copy(tasks=s.tasks+ActionTask(s.nextLocalId("action"),title,"Личное",0,"Из раздела «Мысли»",captureId=thought.captureId))};if(saved){sheet="";notify("Действие добавлено. Исходная мысль сохранена.")};saved}) }
                     "related" -> RelatedThoughtsSheet(state.thoughts.find {it.id==selectedThought},state.thoughts,{id->sheet="";selectedThought=id;nav.navigate("thought/$id"){launchSingleTop=true}},{sheet=""})
                     "thought-source" -> state.thoughts.find {it.id==selectedThought}?.sourceText?.let {InfoSheet(stringResource(R.string.thought_source),it){sheet=""}}
-                    "history" -> CaptureHistorySheet(state){sheet=""}
+                    "history" -> CaptureHistorySheet(state,delete={id->val saved=model.deleteCapture(id);if(saved)notify("Сброс удалён из истории",true);saved}){sheet=""}
                     "sync-conflicts" -> SyncConflictsSheet(conflicts,{id,keepLocal->try{val user=auth.user?:error("No account");graph.sync.resolve(user.id,id,keepLocal);graph.scheduler.enqueue(user.id);true}catch(e: Exception){false}}){sheet=""}
                     "conflict-history" -> ConflictHistorySheet(records.filter{it.kind=="local_conflict_archive"}){sheet=""}
                     "inbox" -> InboxSheet(state.captures.filter{it.status=="inbox"},{capture ->sheet="";model.openAnalysis(capture.id,graph.ai,autoStart=true);nav.navigate("capture/analysis/${capture.id}")},{id ->val saved=model.deleteCapture(id);if(saved)notify("Запись удалена",true);saved},
