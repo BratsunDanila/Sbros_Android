@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.*
 import androidx.compose.ui.semantics.*
@@ -148,18 +149,19 @@ private fun shelfSubtitle(key: String)=when(key){"projects"->R.string.projects_s
 @Composable private fun ProjectHero(project: Project,progress: ProjectProgress,edit: ()->Unit) {
     val c=LocalSbrosColors.current
     val archived=project.completedAt!=null
+    val status=when {archived->"Завершён";progress.allDone->"Шаги выполнены";else->"В работе"}
     Paper(Modifier.fillMaxWidth().testTag("project-hero").clickable(onClick=edit),25.dp,true) {
         Column(Modifier.padding(20.dp)) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Box(Modifier.size(38.dp).background(c.card.copy(alpha=.8f),RoundedCornerShape(13.dp)),contentAlignment=Alignment.Center) {
-                    Glyph(R.drawable.ic_folder,20.dp)
+                    Glyph(if(archived)R.drawable.ic_check else R.drawable.ic_folder,20.dp)
                 }
                 Spacer(Modifier.width(10.dp))
                 Copy(project.area.ifBlank {"Личное"},10.5f,c.muted2,650,Modifier.weight(1f),maxLines=1)
                 Spacer(Modifier.width(8.dp))
                 Row(Modifier.background(c.card.copy(alpha=.65f),RoundedCornerShape(12.dp)).padding(horizontal=9.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically) {
                     Box(Modifier.size(5.dp).background(if(archived)c.good else c.primary,CircleShape))
-                    Spacer(Modifier.width(5.dp));Copy(if(archived)"Завершён" else "В работе",9.5f,c.muted2,650)
+                    Spacer(Modifier.width(5.dp));Copy(status,9.5f,c.muted2,650)
                 }
             }
             Spacer(Modifier.height(17.dp))
@@ -189,7 +191,7 @@ private fun projectDate(value: String)=runCatching {java.time.Instant.parse(valu
     val c=LocalSbrosColors.current
     Row(Modifier.fillMaxWidth().clickable(onClick=toggle).padding(vertical=18.dp).semantics {stateDescription=if(expanded)"Развёрнуто" else "Свёрнуто"},verticalAlignment=Alignment.CenterVertically) {
         Copy(label,12f,c.muted2,700,Modifier.weight(1f))
-        Copy(if(expanded)"−" else "+",20f,c.muted2)
+        Box(Modifier.rotate(if(expanded)-90f else 90f)) {Glyph(R.drawable.ic_chevron,17.dp,c.muted2)}
     }
 }
 
